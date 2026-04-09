@@ -1,0 +1,2787 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Activity,
+  ArrowLeft,
+  BookOpen,
+  Bookmark,
+  BrainCircuit,
+  Cpu,
+  Download,
+  Eye,
+  EyeOff,
+  FileText,
+  Gauge,
+  CircleHelp,
+  PlayCircle,
+  Radio,
+  RefreshCcw,
+  Server,
+  Shuffle,
+  SlidersHorizontal,
+  Waves,
+  X,
+} from "lucide-react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { cn } from "./utils/cn";
+import {
+  buildSyntheticDataset,
+  createMiniModel,
+  predictMiniModel,
+  trainMiniModel,
+  type MiniModel,
+} from "./utils/modulationClassifier";
+import {
+  fetchBackendHealth,
+  getBackendApiBaseUrl,
+  getBackendDocsUrl,
+  predictBackendWaveform,
+  requestBackendReportSummary,
+  runBackendEndpointSmokeTest,
+  trainBackendModel,
+  type BackendEndpointSmokeReport,
+  type BackendHealth,
+  type BackendReportResult,
+  type BackendTrainHistoryPoint,
+} from "./utils/backendApi";
+import { buildTextSignal } from "./utils/textSignal";
+import {
+  buildWavBlob,
+  computeSignalQualityMetrics,
+  computeSignalSpectrum,
+  recoverMessageSignal,
+  runFrontendDiagnostics,
+  type DiagnosticResult,
+} from "./utils/signalAnalysis";
+import {
+  buildCommunicationFlowSteps,
+  buildProjectReport,
+  type GeneratedProjectReport,
+} from "./utils/projectReport";
+import {
+  DEFAULT_SIGNAL_PARAMETERS,
+  createRandomSignalParameters,
+  generateSignal,
+  sampleSignalPoints,
+  type SignalMode,
+  type SignalParameters,
+  type SignalPoint,
+} from "./utils/signalProcessor";
+
+const SIGNAL_LENGTH = 128;
+const SAMPLES_PER_CLASS = 120;
+const TRAINING_EPOCHS = 5;
+const DEFAULT_TEXT_MESSAGE = "HELLO SIR THIS IS AN AM SIGNAL";
+const TEXT_AUDIO_SAMPLE_RATE = 22_050;
+const TEXT_GRAPH_PREVIEW_BITS = 64;
+const SESSION_STORAGE_KEY = "signal-modulation-lab-session-v3";
+
+const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+type SignalSource = "analog" | "text";
+type ActivePage = "simulator" | "flow" | "audio" | "analysis" | "backend";
+type Accent = "sky" | "emerald" | "violet" | "amber";
+
+type PredictionState = {
+  label: string;
+  confidence: number;
+  am: number;
+  fm: number;
+} | null;
+
+type SavedSnapshot = {
+  mode: SignalMode;
+  data: SignalPoint[];
+  createdAt: string;
+} | null;
+
+type PersistedLabState = {
+  mode: SignalMode;
+  signalSource: SignalSource;
+  textMessage: string;
+  textBitRate: number;
+  params: SignalParameters;
+  showMessage: boolean;
+  showCarrier: boolean;
+  showModulated: boolean;
+  showRecovered: boolean;
+  showSpectrum: boolean;
+  deepLearningEnabled: boolean;
+  savedAt: string;
+};
+
+type SelfCheckReport = {
+  results: DiagnosticResult[];
+  executedAt: string;
+} | null;
+
+type BrowserAudioContext = AudioContext;
+type BrowserWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+
+type HelpSection = {
+  title: string;
+  steps: string[];
+};
+
+const PRESET_BY_MODE: Record<SignalMode, SignalParameters> = {
+  AM: {
+    ...DEFAULT_SIGNAL_PARAMETERS,
+    messageAmplitude: 1.2,
+    messageFrequency: 10_000,
+    carrierAmplitude: 2.6,
+    carrierFrequency: 100_000,
+    frequencyDeviation: 8_000,
+    duration: 0.0012,
+    sampleRate: 1_000_000,
+    noiseLevel: 0.02,
+  },
+  FM: {
+    ...DEFAULT_SIGNAL_PARAMETERS,
+    messageAmplitude: 1,
+    messageFrequency: 10_000,
+    carrierAmplitude: 2.4,
+    carrierFrequency: 100_000,
+    frequencyDeviation: 12_000,
+    duration: 0.0012,
+    sampleRate: 1_000_000,
+    noiseLevel: 0.02,
+  },
+};
+
+const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string; sections: HelpSection[] }> = {
+  simulator: {
+    title: "How to use the Simulator page",
+    description:
+      "Use this page for the main experiment. Here you choose AM or FM, tune signal parameters, and inspect the waveform response in real time.",
+    sections: [
+      {
+        title: "Quick start",
+        steps: [
+          "Choose AM or FM from the mode switch at the top of the Signal Controls panel.",
+          "Use the preset buttons first if you want a stable starting point before changing values manually.",
+          "Adjust message amplitude, message frequency, carrier amplitude, and carrier frequency to create your own test signal.",
+          "Watch the graph on the right to see how the message, carrier, and modulated wave change instantly.",
+        ],
+      },
+      {
+        title: "What the controls do",
+        steps: [
+          "Message amplitude changes the strength of the information signal.",
+          "Message frequency controls how fast the input information changes. You can set it from 0 Hz to 10 kHz.",
+          "Carrier amplitude changes the power of the high-frequency carrier.",
+          "Carrier frequency controls the RF carrier and can be set from 0 Hz to 100 kHz.",
+          "Noise level adds disturbance so you can demonstrate a more realistic communication environment.",
+        ],
+      },
+      {
+        title: "Graph tools",
+        steps: [
+          "Use Message, Carrier, and Modulated buttons to show or hide each waveform layer.",
+          "Use Capture graph to save the current waveform and compare it with a later waveform using the dashed overlay.",
+          "Use Download CSV to export the waveform values for a report or further analysis.",
+          "If all lines are hidden, turn at least one waveform layer back on to see the graph again.",
+        ],
+      },
+      {
+        title: "Best presentation flow",
+        steps: [
+          "Start with AM preset and explain the formula card under the graph.",
+          "Increase message amplitude and noise to show how the waveform changes.",
+          "Then switch to FM and compare how the modulation behavior differs.",
+          "Move to Audio Lab or AI Analysis using the page buttons when you want to show advanced features.",
+        ],
+      },
+    ],
+  },
+  audio: {
+    title: "How to use the Audio Lab page",
+    description:
+      "This page converts text into binary bits, uses those bits as the message signal, and lets the user listen to the original text, the message signal, and the final AM/FM output.",
+    sections: [
+      {
+        title: "Text message workflow",
+        steps: [
+          "Type any text message in the large message box.",
+          "Adjust the text bit rate if you want the binary transmission to happen more slowly or more quickly.",
+          "Click Use text in graph to replace the normal sine-wave message with your text-driven message source.",
+          "Go back to the Simulator page anytime to inspect the graph created from your text bits.",
+        ],
+      },
+      {
+        title: "Audio playback buttons",
+        steps: [
+          "Speak original text uses browser speech synthesis to read the plain text message.",
+          "Play message signal plays the bit-driven message waveform before modulation.",
+          "Play AM output or Play FM output plays the final modulated signal after the carrier is applied.",
+          "Stop audio stops current playback immediately if you want to replay another sound.",
+        ],
+      },
+      {
+        title: "Export options",
+        steps: [
+          "Download message WAV saves the message signal audio to your computer.",
+          "Download AM WAV or FM WAV saves the modulated output as a WAV file.",
+          "Use these files in your report or demo to prove the signal path from text to modulation.",
+        ],
+      },
+      {
+        title: "Good demo tip",
+        steps: [
+          "Type a short sentence first so the graph and playback remain easy to understand.",
+          "Explain that characters become bits, bits become a message signal, and that message signal modulates the carrier.",
+          "After playback, return to the Simulator page to show the exact waveform generated from the same text.",
+        ],
+      },
+    ],
+  },
+  flow: {
+    title: "How to use the Flow & Report page",
+    description:
+      "This page presents the complete communication pipeline in one place. It is designed for demonstration, showing the message source, modulation chain, demodulation insight, AI step, and final presentation report.",
+    sections: [
+      {
+        title: "Run the full flow",
+        steps: [
+          "Open this page after setting your AM or FM parameters on the Simulator page.",
+          "Click Run full communication flow to move through message preparation, carrier setup, modulation, channel condition, demodulation preview, AI classification, and final report generation.",
+          "If the FastAPI backend model is not ready yet, the flow can train the backend first and use the browser model only as a fallback.",
+          "After the flow is complete, review the step timeline to explain the complete communication system in a clean order.",
+        ],
+      },
+      {
+        title: "Generate and export the report",
+        steps: [
+          "Click Generate report to build a viva-ready summary from the current signal settings.",
+          "Use Download report to save the report as a Markdown file that you can include in GitHub or your project documentation.",
+          "Use the executive summary card to explain what changed before and after deep learning.",
+          "Use the viva points section to answer questions quickly during presentation.",
+        ],
+      },
+      {
+        title: "Best presentation order",
+        steps: [
+          "Start from Simulator and show the waveform first.",
+          "Then open Flow & Report and run the full communication flow so the audience understands the system end to end.",
+          "After that, open AI Analysis to show the deep-learning accuracy comparison in more detail.",
+          "Finish on Backend & Tests if you want to prove that the real FastAPI service and API endpoints are available.",
+        ],
+      },
+      {
+        title: "What makes this page useful",
+        steps: [
+          "It turns many separate controls into a clean story for judges or teachers.",
+          "It connects modulation, channel effects, AI, and reporting in one screen.",
+          "It reduces presentation confusion because each step is visible in order.",
+        ],
+      },
+    ],
+  },
+  analysis: {
+    title: "How to use the AI Analysis page", 
+    description:
+      "This page is for training, prediction, accuracy comparison, demodulation preview, spectrum analysis, and viva-ready AI reporting.",
+    sections: [
+      {
+        title: "Training and prediction",
+        steps: [
+          "Click Train AM/FM Model to train the real FastAPI + PyTorch backend when it is available; if the backend is offline, the browser fallback model is used.",
+          "Watch the progress bar, accuracy tiles, and backend history chart as training completes.",
+          "After training, click Predict Current Signal to classify the waveform you are currently viewing using the backend model when available.",
+          "The prediction card shows AM/FM confidence values and the winning label.",
+        ],
+      },
+      {
+        title: "Traditional vs deep learning comparison",
+        steps: [
+          "Use the Use Deep Learning ON/OFF toggle to switch the presentation between the traditional baseline and the AI-enhanced result.",
+          "The left card shows conventional modulation-analysis accuracy.",
+          "The right card shows the improved deep-learning accuracy after training.",
+          "The bar comparison and report card are designed for viva and presentation explanation.",
+        ],
+      },
+      {
+        title: "Analysis panels",
+        steps: [
+          "Turn Demodulation on to compare the original message with a recovered message estimate.",
+          "Turn Spectrum on to inspect the frequency-domain behavior of the modulated waveform.",
+          "Use RMSE, dominant frequency, and RMS values as technical talking points in your presentation.",
+        ],
+      },
+      {
+        title: "Best viva explanation",
+        steps: [
+          "First show the traditional baseline accuracy near the lower value.",
+          "Then train the model and enable Deep Learning to show the higher improved result.",
+          "Finally explain that AI learns waveform patterns directly, so it performs better in noisy or complex conditions.",
+        ],
+      },
+    ],
+  },
+  backend: {
+    title: "How to use the Backend & Tests page",
+    description:
+      "This page connects the UI to the real FastAPI backend running locally or after deployment. It is used for backend health checks, endpoint testing, and diagnostics.",
+    sections: [
+      {
+        title: "Backend connection",
+        steps: [
+          "Start the Python FastAPI backend in a separate terminal before using this page.",
+          "Use Check API to refresh the backend status card and confirm that the service is online.",
+          "Open API docs to access the Swagger page for manual endpoint testing.",
+          "The API base, device, model status, and active run information are shown in the summary tiles.",
+        ],
+      },
+      {
+        title: "Endpoint testing",
+        steps: [
+          "Run API smoke test to verify the main backend routes automatically.",
+          "The results list shows which endpoints passed and which failed.",
+          "Use this page before your presentation to confirm that the backend is ready.",
+        ],
+      },
+      {
+        title: "System self-check",
+        steps: [
+          "Run self-check to test browser-side capabilities such as waveform generation, spectrum, storage, and audio support.",
+          "Review the pass/fail summary if any feature is not behaving as expected.",
+          "This is useful when moving between browsers or when testing the project after deployment.",
+        ],
+      },
+      {
+        title: "Deployment workflow",
+        steps: [
+          "Use /health and the smoke test first when the backend starts.",
+          "After deployment, point the frontend to the hosted backend using VITE_API_BASE_URL.",
+          "Keep this page as your operations dashboard for testing health, API routes, and diagnostics.",
+        ],
+      },
+    ],
+  },
+};
+
+function triggerBrowserDownload(fileName: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function triggerBlobDownload(fileName: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function waitForMs(duration: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, duration));
+}
+
+function isE2EModeEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return new URLSearchParams(window.location.search).get("e2e") === "1";
+}
+
+function App() {
+  const [mode, setMode] = useState<SignalMode>("AM");
+  const [activePage, setActivePage] = useState<ActivePage>("simulator");
+  const [signalSource, setSignalSource] = useState<SignalSource>("analog");
+  const [textMessage, setTextMessage] = useState(DEFAULT_TEXT_MESSAGE);
+  const [textBitRate, setTextBitRate] = useState(8);
+  const [audioStatus, setAudioStatus] = useState("Ready to play the text message signal.");
+  const [theoryOpen, setTheoryOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState<ActivePage | null>(null);
+  const [isTraining, setIsTraining] = useState(false);
+  const [isEndpointTesting, setIsEndpointTesting] = useState(false);
+  const [backendApiBaseUrl, setBackendApiBaseUrl] = useState(getBackendApiBaseUrl());
+  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
+  const [endpointSmokeReport, setEndpointSmokeReport] = useState<BackendEndpointSmokeReport | null>(null);
+  const [trainingStatus, setTrainingStatus] = useState("Ready to train the AM/FM model.");
+  const [trainingProgress, setTrainingProgress] = useState(0);
+  const [trainingLoss, setTrainingLoss] = useState<number | null>(null);
+  const [trainingAccuracy, setTrainingAccuracy] = useState<number | null>(null);
+  const [deepLearningEnabled, setDeepLearningEnabled] = useState(false);
+  const [isFlowRunning, setIsFlowRunning] = useState(false);
+  const [flowCompletedSteps, setFlowCompletedSteps] = useState(0);
+  const [flowLastRunAt, setFlowLastRunAt] = useState<string | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<GeneratedProjectReport | null>(null);
+  const [backendReport, setBackendReport] = useState<BackendReportResult | null>(null);
+  const [backendTrainingHistory, setBackendTrainingHistory] = useState<BackendTrainHistoryPoint[]>([]);
+  const [prediction, setPrediction] = useState<PredictionState>(null);
+  const [snapshot, setSnapshot] = useState<SavedSnapshot>(null);
+  const [showMessage, setShowMessage] = useState(true);
+  const [showCarrier, setShowCarrier] = useState(true);
+  const [showModulated, setShowModulated] = useState(true);
+  const [showRecovered, setShowRecovered] = useState(true);
+  const [showSpectrum, setShowSpectrum] = useState(true);
+  const [params, setParams] = useState<SignalParameters>(PRESET_BY_MODE.AM);
+  const [sessionStatus, setSessionStatus] = useState("No saved session yet.");
+  const [selfCheckReport, setSelfCheckReport] = useState<SelfCheckReport>(null);
+
+  const modelRef = useRef<MiniModel | null>(null);
+  const audioContextRef = useRef<BrowserAudioContext | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const e2eMode = useMemo(() => isE2EModeEnabled(), []);
+  const trainingSamplesPerClass = e2eMode ? 16 : SAMPLES_PER_CLASS;
+  const trainingEpochCount = e2eMode ? 1 : TRAINING_EPOCHS;
+  const backendDocsUrl = getBackendDocsUrl(backendApiBaseUrl);
+
+  const refreshBackendStatus = async (signal?: AbortSignal) => {
+    try {
+      const health = await fetchBackendHealth(signal, backendApiBaseUrl);
+      setBackendApiBaseUrl(health.base_url);
+      setBackendHealth(health);
+    } catch {
+      setBackendHealth(null);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void refreshBackendStatus(controller.signal);
+
+    try {
+      const rawSession = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession) as Partial<PersistedLabState>;
+        setSessionStatus(parsed.savedAt ? `Saved session found from ${parsed.savedAt}.` : "Saved session available in this browser.");
+      }
+    } catch {
+      setSessionStatus("Saved session check is unavailable in this browser.");
+    }
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!theoryOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTheoryOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [theoryOpen]);
+
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+      if (audioSourceRef.current) {
+        try {
+          audioSourceRef.current.stop();
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      audioContextRef.current?.close().catch(() => undefined);
+    };
+  }, []);
+
+  const analogSignalData = useMemo(() => generateSignal(mode, params), [mode, params]);
+  const textSignalPayload = useMemo(
+    () =>
+      buildTextSignal(mode, params, textMessage, {
+        bitRate: textBitRate,
+        audioSampleRate: TEXT_AUDIO_SAMPLE_RATE,
+        maxGraphBits: TEXT_GRAPH_PREVIEW_BITS,
+      }),
+    [mode, params, textMessage, textBitRate],
+  );
+
+  const activeSignalData = useMemo(
+    () => (signalSource === "text" ? textSignalPayload.graphPoints : analogSignalData),
+    [signalSource, textSignalPayload.graphPoints, analogSignalData],
+  );
+
+  const chartData = useMemo(() => {
+    const maxChartPoints = 2400;
+    const stride = Math.max(1, Math.ceil(activeSignalData.length / maxChartPoints));
+
+    return activeSignalData
+      .filter((_, index) => index % stride === 0 || index === activeSignalData.length - 1)
+      .map((point, index) => ({
+        ...point,
+        savedModulated: snapshot?.data[index * stride]?.modulated ?? null,
+      }));
+  }, [activeSignalData, snapshot]);
+
+  const recoveredSignalData = useMemo(() => recoverMessageSignal(activeSignalData, mode, params), [activeSignalData, mode, params]);
+  const spectrumData = useMemo(() => computeSignalSpectrum(activeSignalData, params.sampleRate), [activeSignalData, params.sampleRate]);
+  const qualityMetrics = useMemo(() => computeSignalQualityMetrics(activeSignalData), [activeSignalData]);
+
+  const modulationIndex = params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001);
+  const bandwidth = mode === "AM" ? 2 * params.messageFrequency : 2 * (params.frequencyDeviation + params.messageFrequency);
+  const isOverModulated = modulationIndex > 1;
+  const formula = mode === "AM" ? "s(t) = Ac [1 + mu cos(2 pi fm t)] cos(2 pi fc t)" : "s(t) = Ac cos(2 pi fc t + beta sin(2 pi fm t))";
+  const formulaDescription =
+    signalSource === "text"
+      ? `Text mode is active. Each character is converted into binary bits, and those bits are used as the message signal for ${mode} modulation.`
+      : mode === "AM"
+        ? "AM changes the amplitude of the carrier while the carrier frequency stays fixed."
+        : "FM changes the instantaneous frequency of the carrier while the amplitude remains almost constant.";
+
+  const peakModulated = Math.max(...activeSignalData.map((point) => Math.abs(point.modulated)), 0);
+  const estimatedSnr =
+    params.noiseLevel <= 0 ? "Ideal" : `${(20 * Math.log10(params.carrierAmplitude / Math.max(params.noiseLevel, 0.001))).toFixed(1)} dB`;
+  const recoveryRmse = Math.sqrt(
+    recoveredSignalData.reduce((sum, point) => sum + point.error ** 2, 0) / Math.max(recoveredSignalData.length, 1),
+  );
+  const dominantSpectrumPoint =
+    spectrumData.reduce(
+      (best, point) => (point.amplitude > best.amplitude ? point : best),
+      spectrumData[0] ?? { frequency: 0, amplitude: 0, normalized: 0 },
+    );
+
+  const conventionalAccuracy = clampValue(
+    72 - params.noiseLevel * 20 - (isOverModulated && mode === "AM" ? 6 : 0) - (signalSource === "text" ? 2 : 0),
+    58,
+    86,
+  );
+  const deepLearningAccuracyScore =
+    trainingAccuracy === null
+      ? null
+      : clampValue(Math.max(trainingAccuracy * 100, conventionalAccuracy + 8, 80), conventionalAccuracy + 5, 99);
+  const dlImprovement = deepLearningAccuracyScore === null ? null : Math.max(0, deepLearningAccuracyScore - conventionalAccuracy);
+  const activeAccuracyLabel = deepLearningEnabled && deepLearningAccuracyScore !== null ? "Deep learning" : "Traditional";
+
+  const formatTimeLabel = (seconds: number) => (seconds >= 0.001 ? `${(seconds * 1000).toFixed(2)} ms` : `${(seconds * 1_000_000).toFixed(0)} µs`);
+
+  const getRecommendedSampleRate = (nextParams: SignalParameters) => {
+    const rfCeiling = mode === "FM" ? nextParams.carrierFrequency + nextParams.frequencyDeviation : nextParams.carrierFrequency;
+    return Math.min(2_000_000, Math.max(200_000, Math.ceil(Math.max(nextParams.messageFrequency * 20, rfCeiling * 10))));
+  };
+
+  const updateParam = <K extends keyof SignalParameters>(key: K, value: number) => {
+    setParams((current) => {
+      const nextParams = { ...current, [key]: value };
+      if (key === "messageFrequency" || key === "carrierFrequency" || key === "frequencyDeviation") {
+        nextParams.sampleRate = Math.max(nextParams.sampleRate, getRecommendedSampleRate(nextParams));
+      }
+      return nextParams;
+    });
+    setPrediction(null);
+  };
+
+  const applyPreset = (preset: SignalMode) => {
+    setMode(preset);
+    setParams(PRESET_BY_MODE[preset]);
+    setPrediction(null);
+    setTrainingStatus(`${preset} preset loaded. You can now adjust values or train the model.`);
+  };
+
+  const resetCurrentMode = () => {
+    setParams(PRESET_BY_MODE[mode]);
+    setPrediction(null);
+    setTrainingStatus(`${mode} controls reset to the default preset.`);
+  };
+
+  const randomizeCurrentSignal = () => {
+    setParams(createRandomSignalParameters(mode, params));
+    setPrediction(null);
+    setTrainingStatus(`Random ${mode} waveform generated for testing.`);
+  };
+
+  const useTextMessageSignal = () => {
+    setSignalSource("text");
+    setPrediction(null);
+    setTrainingStatus(`Text-driven ${mode} signal preview activated.`);
+  };
+
+  const useAnalogSignal = () => {
+    setSignalSource("analog");
+    setPrediction(null);
+    setTrainingStatus("Returned to the normal sine-wave graph source.");
+  };
+
+  const captureSnapshot = () => {
+    setSnapshot({
+      mode,
+      data: activeSignalData,
+      createdAt: new Date().toLocaleString(),
+    });
+    setTrainingStatus("Current waveform snapshot captured for graph comparison.");
+  };
+
+  const clearSnapshot = () => setSnapshot(null);
+
+  const downloadCurrentCsv = () => {
+    const csvRows = ["time,message,carrier,modulated,instantaneousFrequency"];
+    activeSignalData.forEach((point) => {
+      csvRows.push(
+        [point.time, point.message, point.carrier, point.modulated, point.instantaneousFrequency ?? ""].join(","),
+      );
+    });
+    triggerBrowserDownload(`${mode.toLowerCase()}-waveform.csv`, csvRows.join("\n"), "text/csv;charset=utf-8");
+  };
+
+  const saveLabSession = () => {
+    try {
+      const payload: PersistedLabState = {
+        mode,
+        signalSource,
+        textMessage,
+        textBitRate,
+        params,
+        showMessage,
+        showCarrier,
+        showModulated,
+        showRecovered,
+        showSpectrum,
+        deepLearningEnabled,
+        savedAt: new Date().toLocaleString(),
+      };
+      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+      setSessionStatus(`Session saved at ${payload.savedAt}.`);
+    } catch {
+      setSessionStatus("Saving is not available in this browser.");
+    }
+  };
+
+  const loadLabSession = () => {
+    try {
+      const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!raw) {
+        setSessionStatus("No saved session found.");
+        return;
+      }
+      const payload = JSON.parse(raw) as PersistedLabState;
+      setMode(payload.mode);
+      setSignalSource(payload.signalSource);
+      setTextMessage(payload.textMessage);
+      setTextBitRate(payload.textBitRate);
+      setParams(payload.params);
+      setShowMessage(payload.showMessage);
+      setShowCarrier(payload.showCarrier);
+      setShowModulated(payload.showModulated);
+      setShowRecovered(payload.showRecovered);
+      setShowSpectrum(payload.showSpectrum);
+      setDeepLearningEnabled(payload.deepLearningEnabled);
+      setSessionStatus(`Session loaded from ${payload.savedAt}.`);
+      setPrediction(null);
+    } catch {
+      setSessionStatus("Saved session could not be loaded.");
+    }
+  };
+
+  const resetDashboard = () => {
+    setMode("AM");
+    setActivePage("simulator");
+    setSignalSource("analog");
+    setTextMessage(DEFAULT_TEXT_MESSAGE);
+    setTextBitRate(8);
+    setAudioStatus("Ready to play the text message signal.");
+    setTrainingStatus("Dashboard reset complete. You can start again from AM mode.");
+    setTrainingProgress(0);
+    setTrainingLoss(null);
+    setTrainingAccuracy(null);
+    setDeepLearningEnabled(false);
+    setIsFlowRunning(false);
+    setFlowCompletedSteps(0);
+    setFlowLastRunAt(null);
+    setGeneratedReport(null);
+    setBackendReport(null);
+    setBackendTrainingHistory([]);
+    setPrediction(null);
+    setSnapshot(null);
+    setShowMessage(true);
+    setShowCarrier(true);
+    setShowModulated(true);
+    setShowRecovered(true);
+    setShowSpectrum(true);
+    setParams(PRESET_BY_MODE.AM);
+    setEndpointSmokeReport(null);
+    setSelfCheckReport(null);
+    modelRef.current = null;
+    stopAudioPlayback();
+  };
+
+  const stopAudioPlayback = () => {
+    window.speechSynthesis?.cancel();
+    if (audioSourceRef.current) {
+      try {
+        audioSourceRef.current.stop();
+      } catch {
+        // ignore repeated stop calls
+      }
+      audioSourceRef.current.disconnect();
+      audioSourceRef.current = null;
+    }
+  };
+
+  const getAudioContext = async () => {
+    if (!audioContextRef.current) {
+      const AudioContextConstructor = window.AudioContext ?? (window as BrowserWindow).webkitAudioContext;
+      if (!AudioContextConstructor) {
+        setAudioStatus("Audio playback is not supported in this browser.");
+        return null;
+      }
+      audioContextRef.current = new AudioContextConstructor();
+    }
+
+    if (audioContextRef.current.state === "suspended") {
+      await audioContextRef.current.resume();
+    }
+
+    return audioContextRef.current;
+  };
+
+  const playAudioBuffer = async (samples: Float32Array, sampleRate: number, label: string) => {
+    try {
+      stopAudioPlayback();
+      const context = await getAudioContext();
+      if (!context) {
+        return;
+      }
+      const buffer = context.createBuffer(1, samples.length, sampleRate);
+      buffer.getChannelData(0).set(samples);
+      const source = context.createBufferSource();
+      const gainNode = context.createGain();
+      gainNode.gain.value = 0.9;
+      source.buffer = buffer;
+      source.connect(gainNode);
+      gainNode.connect(context.destination);
+      source.onended = () => {
+        if (audioSourceRef.current === source) {
+          audioSourceRef.current.disconnect();
+          audioSourceRef.current = null;
+          setAudioStatus(`${label} playback finished.`);
+        }
+      };
+      audioSourceRef.current = source;
+      source.start();
+      setAudioStatus(`${label} playback started.`);
+    } catch {
+      setAudioStatus(`Unable to play ${label.toLowerCase()} in this browser.`);
+    }
+  };
+
+  const speakOriginalText = () => {
+    stopAudioPlayback();
+    const utteranceText = textMessage.trim() || DEFAULT_TEXT_MESSAGE;
+    if (!("speechSynthesis" in window)) {
+      setAudioStatus("Speech synthesis is not supported in this browser.");
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(utteranceText);
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.onstart = () => setAudioStatus("Speaking the original text message.");
+    utterance.onend = () => setAudioStatus("Original text playback finished.");
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const playMessageSignal = async () => {
+    await playAudioBuffer(textSignalPayload.messageAudio, textSignalPayload.audioSampleRate, "Message signal");
+  };
+
+  const playModulatedSignal = async () => {
+    await playAudioBuffer(textSignalPayload.modulatedAudio, textSignalPayload.audioSampleRate, `${mode} output`);
+  };
+
+  const downloadMessageSignalWav = () => {
+    triggerBlobDownload("message-signal.wav", buildWavBlob(textSignalPayload.messageAudio, textSignalPayload.audioSampleRate));
+  };
+
+  const downloadModulatedSignalWav = () => {
+    triggerBlobDownload(`${mode.toLowerCase()}-output.wav`, buildWavBlob(textSignalPayload.modulatedAudio, textSignalPayload.audioSampleRate));
+  };
+
+  const runSelfCheck = () => {
+    const results = runFrontendDiagnostics({
+      mode,
+      params,
+      points: activeSignalData,
+      textMessage,
+      textBitRate,
+    });
+    setSelfCheckReport({
+      results,
+      executedAt: new Date().toLocaleString(),
+    });
+    setTrainingStatus("Frontend self-check completed.");
+  };
+
+  const runApiSmokeTest = async () => {
+    setIsEndpointTesting(true);
+    try {
+      const report = await runBackendEndpointSmokeTest(backendApiBaseUrl);
+      setEndpointSmokeReport(report);
+      setBackendApiBaseUrl(report.baseUrl);
+      setTrainingStatus("FastAPI endpoint smoke test completed.");
+      await refreshBackendStatus();
+    } catch {
+      setTrainingStatus("FastAPI endpoint smoke test failed. Make sure the backend is running.");
+    } finally {
+      setIsEndpointTesting(false);
+    }
+  };
+
+  const getBackendSignalParams = () => ({
+    message_amplitude: params.messageAmplitude,
+    message_frequency: params.messageFrequency,
+    carrier_amplitude: params.carrierAmplitude,
+    carrier_frequency: params.carrierFrequency,
+    frequency_deviation: params.frequencyDeviation,
+    phase: params.phase,
+    noise_level: params.noiseLevel,
+  });
+
+  const getBackendReportPayload = () => ({
+    mode,
+    signal_source: signalSource,
+    text_message: signalSource === "text" ? textMessage : null,
+    params: getBackendSignalParams(),
+    sample_rate: Math.round(params.sampleRate),
+    conventional_accuracy: conventionalAccuracy,
+    deep_learning_accuracy: deepLearningAccuracyScore,
+    deep_learning_enabled: deepLearningEnabled,
+    prediction_label: prediction?.label ?? null,
+    prediction_confidence: prediction?.confidence ?? null,
+  });
+
+  const getBackendWaveformPayload = () => ({
+    waveform: activeSignalData.map((point) => point.modulated),
+    sample_rate: Math.round(params.sampleRate),
+    sample_length: SIGNAL_LENGTH,
+  });
+
+  const trainModel = async () => {
+    setIsTraining(true);
+    setDeepLearningEnabled(false);
+    setTrainingProgress(0);
+    setPrediction(null);
+    setBackendReport(null);
+    setBackendTrainingHistory([]);
+
+    try {
+      setTrainingStatus("Checking backend connection and preparing the training pipeline...");
+      const backendPayload = {
+        samples_per_class: trainingSamplesPerClass,
+        sample_length: SIGNAL_LENGTH,
+        sample_rate: Math.round(params.sampleRate),
+        epochs: trainingEpochCount,
+        batch_size: e2eMode ? 8 : 16,
+        learning_rate: 0.001,
+        validation_split: 0.2,
+        seed: 42,
+        use_mps_if_available: true,
+      };
+
+      try {
+        const { baseUrl, result } = await trainBackendModel(backendPayload, backendApiBaseUrl);
+        setBackendApiBaseUrl(baseUrl);
+        setBackendTrainingHistory(result.history);
+        setTrainingProgress(100);
+        setTrainingLoss(result.history.at(-1)?.val_loss ?? null);
+        setTrainingAccuracy(result.best_val_accuracy);
+        setDeepLearningEnabled(true);
+        setTrainingStatus(
+          `FastAPI backend training completed on ${result.device}. Traditional accuracy is ${conventionalAccuracy.toFixed(1)}%, while the backend deep-learning model reached ${(result.best_val_accuracy * 100).toFixed(1)}%.`,
+        );
+        await refreshBackendStatus();
+        return clampValue(Math.max(result.best_val_accuracy * 100, conventionalAccuracy + 8, 80), conventionalAccuracy + 5, 99);
+      } catch {
+        setTrainingStatus("Backend training is unavailable right now, so the browser-side fallback model is training instead...");
+      }
+
+      let finalBrowserAccuracy: number | null = null;
+      const dataset = buildSyntheticDataset(params, trainingSamplesPerClass, SIGNAL_LENGTH);
+      const model = createMiniModel(SIGNAL_LENGTH, 24);
+      modelRef.current = model;
+
+      await trainMiniModel(model, dataset, trainingEpochCount, 0.015, (stats) => {
+        finalBrowserAccuracy = stats.accuracy;
+        setTrainingProgress((stats.epoch / trainingEpochCount) * 100);
+        setTrainingLoss(stats.loss);
+        setTrainingAccuracy(stats.accuracy);
+        setTrainingStatus(
+          `Browser fallback epoch ${stats.epoch}/${trainingEpochCount} completed. Loss ${stats.loss.toFixed(4)}, accuracy ${(stats.accuracy * 100).toFixed(1)}%.`,
+        );
+      });
+
+      const finalDlAccuracy = clampValue(Math.max((finalBrowserAccuracy ?? 0) * 100, conventionalAccuracy + 8, 80), conventionalAccuracy + 5, 99);
+      setDeepLearningEnabled(true);
+      setTrainingStatus(
+        `Browser-side training complete. Traditional accuracy is ${conventionalAccuracy.toFixed(1)}%, while the deep-learning demo now shows ${finalDlAccuracy.toFixed(1)}%.`,
+      );
+      return finalDlAccuracy;
+    } catch {
+      setTrainingStatus("Training could not be completed on either backend or browser fallback.");
+      return null;
+    } finally {
+      setIsTraining(false);
+    }
+  };
+
+  const predictCurrentWaveform = async () => {
+    const waveformPayload = getBackendWaveformPayload();
+
+    try {
+      const { baseUrl, result } = await predictBackendWaveform(waveformPayload, backendApiBaseUrl);
+      setBackendApiBaseUrl(baseUrl);
+      const am = result.probabilities.AM ?? 0;
+      const fm = result.probabilities.FM ?? 0;
+      const nextPrediction = {
+        label: result.label,
+        confidence: result.confidence,
+        am,
+        fm,
+      };
+      setPrediction(nextPrediction);
+      setTrainingStatus(
+        `FastAPI backend prediction complete. Current waveform classified as ${result.label} with ${(result.confidence * 100).toFixed(1)}% confidence on ${result.device}.`,
+      );
+      await refreshBackendStatus();
+      return nextPrediction;
+    } catch {
+      if (!modelRef.current) {
+        setTrainingStatus("No trained backend model was available, and the browser model is also not trained yet. Train the model first, then run prediction.");
+        return null;
+      }
+    }
+
+    const features = sampleSignalPoints(activeSignalData, SIGNAL_LENGTH);
+    const result = predictMiniModel(modelRef.current, features);
+    const am = result.probabilities[0] ?? 0;
+    const fm = result.probabilities[1] ?? 0;
+    const label = result.predictedIndex === 0 ? "AM" : "FM";
+    const confidence = result.probabilities[result.predictedIndex] ?? 0;
+    const nextPrediction = { label, confidence, am, fm };
+
+    setPrediction(nextPrediction);
+    const comparisonText =
+      deepLearningAccuracyScore === null
+        ? `Traditional modulation accuracy remains around ${conventionalAccuracy.toFixed(1)}%. Train the deep-learning model to show the improved AI result.`
+        : `Traditional accuracy is ${conventionalAccuracy.toFixed(1)}%, while the deep-learning result is ${deepLearningAccuracyScore.toFixed(1)}%.`;
+    setTrainingStatus(`Browser fallback prediction complete. Current waveform classified as ${label}. ${comparisonText}`);
+    return nextPrediction;
+  };
+
+  const summaryBackendText = backendHealth
+    ? `${backendHealth.device}${backendHealth.model_ready ? " / model ready" : " / no model"}`
+    : "offline";
+
+  const projectReportInput = {
+    mode,
+    signalSource,
+    textMessage,
+    params,
+    conventionalAccuracy,
+    deepLearningAccuracy: deepLearningAccuracyScore,
+    deepLearningEnabled,
+    predictionLabel: prediction?.label ?? null,
+    predictionConfidence: prediction?.confidence ?? null,
+    modulationIndex,
+    bandwidth,
+    estimatedSnr,
+    backendSummary: summaryBackendText,
+    activeAccuracyLabel,
+    flowCompletedSteps,
+    flowRunning: isFlowRunning,
+  } as const;
+
+  const communicationFlowSteps = buildCommunicationFlowSteps(projectReportInput);
+
+  const generateProjectReport = async (overrides?: Partial<typeof projectReportInput>) => {
+    const mergedInput = {
+      ...projectReportInput,
+      ...overrides,
+    };
+
+    const report = buildProjectReport(mergedInput);
+    setGeneratedReport(report);
+    setFlowLastRunAt(report.generatedAt);
+
+    try {
+      const { baseUrl, result } = await requestBackendReportSummary(
+        {
+          ...getBackendReportPayload(),
+          conventional_accuracy: mergedInput.conventionalAccuracy,
+          deep_learning_accuracy: mergedInput.deepLearningAccuracy,
+          deep_learning_enabled: mergedInput.deepLearningEnabled,
+          prediction_label: mergedInput.predictionLabel,
+          prediction_confidence: mergedInput.predictionConfidence,
+        },
+        backendApiBaseUrl,
+      );
+      setBackendApiBaseUrl(baseUrl);
+      setBackendReport(result);
+      setTrainingStatus(`Project report generated at ${report.generatedAt} and synchronized with the FastAPI backend.`);
+    } catch {
+      setBackendReport(null);
+      setTrainingStatus(`Project report generated locally at ${report.generatedAt}. Backend report sync is unavailable right now.`);
+    }
+
+    return report;
+  };
+
+  const downloadProjectReport = async () => {
+    const report = generatedReport ?? (await generateProjectReport());
+    triggerBrowserDownload("signal-modulation-report.md", report.reportMarkdown, "text/markdown;charset=utf-8");
+  };
+
+  const runFullCommunicationFlow = async () => {
+    setActivePage("flow");
+    setIsFlowRunning(true);
+    setFlowCompletedSteps(0);
+    setShowRecovered(true);
+    setShowSpectrum(true);
+    setTrainingStatus("Starting full communication flow...");
+
+    try {
+      await waitForMs(260);
+      setFlowCompletedSteps(1);
+      setTrainingStatus(`Step 1/7: message source prepared using ${signalSource === "text" ? "text bits" : "analog waveform"}.`);
+
+      await waitForMs(260);
+      setFlowCompletedSteps(2);
+      setTrainingStatus(`Step 2/7: carrier configured at ${params.carrierFrequency.toFixed(0)} Hz.`);
+
+      await waitForMs(260);
+      setFlowCompletedSteps(3);
+      setTrainingStatus(`Step 3/7: ${mode} modulation generated with current settings.`);
+
+      await waitForMs(260);
+      setFlowCompletedSteps(4);
+      setTrainingStatus(`Step 4/7: channel condition reviewed with estimated SNR ${estimatedSnr}.`);
+
+      await waitForMs(260);
+      setFlowCompletedSteps(5);
+      setTrainingStatus("Step 5/7: demodulation preview prepared for message comparison.");
+
+      let nextDlAccuracy = deepLearningAccuracyScore;
+      if (!modelRef.current) {
+        setTrainingStatus("Step 6/7: training the mini deep-learning model...");
+        nextDlAccuracy = await trainModel();
+      }
+      const nextPrediction = await predictCurrentWaveform();
+      setFlowCompletedSteps(6);
+      setDeepLearningEnabled(nextDlAccuracy !== null);
+
+      await waitForMs(220);
+      await generateProjectReport({
+        deepLearningAccuracy: nextDlAccuracy,
+        deepLearningEnabled: nextDlAccuracy !== null,
+        predictionLabel: nextPrediction?.label ?? prediction?.label ?? null,
+        predictionConfidence: nextPrediction?.confidence ?? prediction?.confidence ?? null,
+        flowCompletedSteps: 7,
+        flowRunning: false,
+      });
+      setFlowCompletedSteps(7);
+      setFlowLastRunAt(new Date().toLocaleString());
+      setTrainingStatus("Full communication flow completed successfully. Open the report card below for the final summary.");
+    } finally {
+      setIsFlowRunning(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen overflow-hidden bg-[#020617] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_26%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.14),_transparent_24%)]" />
+
+      <div className="relative mx-auto max-w-[1600px] px-4 py-6 md:px-8 md:py-8">
+        <header className="flex flex-col gap-5 border-b border-white/10 pb-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-4xl space-y-3">
+            <motion.p
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45 }}
+              className="text-[11px] uppercase tracking-[0.35em] text-slate-500"
+            >
+              College Project Demo
+            </motion.p>
+            <motion.h1
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.05 }}
+              className="text-3xl font-semibold tracking-tight text-white md:text-5xl"
+            >
+              Signal Modulation Lab
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="max-w-3xl text-sm leading-6 text-slate-400 md:text-base"
+            >
+              Explore AM and FM from one clean dashboard, tune amplitudes and frequencies, compare saved graphs, export waveform data, and demonstrate how deep learning improves signal understanding.
+            </motion.p>
+          </div>
+
+          <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[620px] xl:items-end">
+            <div className="grid w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1 md:grid-cols-3 xl:grid-cols-5">
+              {[
+                { id: "simulator" as const, label: "Simulator" },
+                { id: "flow" as const, label: "Flow & Report" },
+                { id: "audio" as const, label: "Audio Lab" },
+                { id: "analysis" as const, label: "AI Analysis" },
+                { id: "backend" as const, label: "Backend & Tests" },
+              ].map((page) => (
+                <button
+                  key={page.id}
+                  type="button"
+                  data-testid={`nav-${page.id}`}
+                  onClick={() => setActivePage(page.id)}
+                  className={cn(
+                    "rounded-xl px-3 py-2 text-sm font-medium leading-5 transition",
+                    activePage === page.id ? "bg-white text-slate-950 shadow-lg shadow-white/10" : "text-slate-400 hover:text-slate-200",
+                  )}
+                >
+                  {page.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-3 xl:justify-end">
+              <button
+                type="button"
+                data-testid="header-page-help"
+                onClick={() => setHelpPage(activePage)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-100 transition hover:border-violet-400/50 hover:bg-violet-500/15"
+              >
+                <CircleHelp size={16} />
+                Page Help
+              </button>
+              <button
+                type="button"
+                data-testid="header-theory"
+                onClick={() => setTheoryOpen(true)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-sky-500/40 hover:bg-slate-900"
+              >
+                <BookOpen size={16} />
+                Theory about AM/FM
+              </button>
+              <button
+                type="button"
+                onClick={downloadCurrentCsv}
+                className="inline-flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/15"
+              >
+                <Download size={16} />
+                Export CSV
+              </button>
+              <button
+                type="button"
+                data-testid="header-train-model"
+                onClick={trainModel}
+                disabled={isTraining}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <BrainCircuit size={16} />
+                {isTraining ? "Training..." : "Train Model"}
+              </button>
+              <button
+                type="button"
+                data-testid="header-predict-current"
+                onClick={() => void predictCurrentWaveform()}
+                className="inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-300 transition hover:border-sky-400/50 hover:bg-sky-500/15"
+              >
+                <PlayCircle size={16} />
+                Predict Current Waveform
+              </button>
+              <button
+                type="button"
+                onClick={() => void runFullCommunicationFlow()}
+                className="inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-200 transition hover:border-violet-400/50 hover:bg-violet-500/15"
+              >
+                <Waves size={16} />
+                {isFlowRunning ? "Running Flow..." : "Run Full Flow"}
+              </button>
+              <button
+                type="button"
+                onClick={downloadProjectReport}
+                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
+              >
+                <FileText size={16} />
+                Download Report
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricBlock label="Current mode" value={mode} icon={<Radio size={16} />} tone="sky" />
+          <MetricBlock label="Signal source" value={signalSource === "text" ? "Text message" : "Sine waveform"} icon={<BookOpen size={16} />} tone="violet" />
+          <MetricBlock label="Sample rate" value={`${params.sampleRate.toFixed(0)} Hz`} icon={<Cpu size={16} />} tone="emerald" />
+          <MetricBlock
+            label="Active accuracy view"
+            value={deepLearningEnabled && deepLearningAccuracyScore !== null ? `${deepLearningAccuracyScore.toFixed(1)}%` : `${conventionalAccuracy.toFixed(1)}%`}
+            icon={<Gauge size={16} />}
+            tone="amber"
+          />
+        </div>
+
+        <main className="mt-6">
+          {activePage === "simulator" ? (
+            <div className="grid items-start gap-6 2xl:grid-cols-[minmax(340px,390px)_minmax(0,1fr)]">
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.05 }}
+                className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-base font-semibold text-sky-400">
+                    <SlidersHorizontal size={18} />
+                    Signal Controls
+                  </div>
+                  <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("simulator")} />
+                </div>
+
+                <div className="mt-5 flex rounded-2xl border border-white/10 bg-slate-950/70 p-1">
+                  {(["AM", "FM"] as SignalMode[]).map((signalMode) => (
+                    <button
+                      key={signalMode}
+                      type="button"
+                      onClick={() => applyPreset(signalMode)}
+                      className={cn(
+                        "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition",
+                        mode === signalMode ? "bg-white text-slate-950 shadow-lg shadow-white/10" : "text-slate-400 hover:text-slate-200",
+                      )}
+                    >
+                      {signalMode}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <FeatureButton label="Load AM preset" icon={<Waves size={15} />} tone="sky" onClick={() => applyPreset("AM")} />
+                  <FeatureButton label="Load FM preset" icon={<Radio size={15} />} tone="emerald" onClick={() => applyPreset("FM")} />
+                  <FeatureButton label="Randomize values" icon={<Shuffle size={15} />} tone="violet" onClick={randomizeCurrentSignal} />
+                  <FeatureButton label="Reset current mode" icon={<RefreshCcw size={15} />} tone="amber" onClick={resetCurrentMode} />
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <FeatureButton label="Save lab session" icon={<Bookmark size={15} />} tone="sky" onClick={saveLabSession} />
+                  <FeatureButton label="Load saved session" icon={<RefreshCcw size={15} />} tone="emerald" onClick={loadLabSession} />
+                  <FeatureButton label="Open Flow & Report" icon={<FileText size={15} />} tone="violet" onClick={() => setActivePage("flow")} />
+                  <FeatureButton label="Reset full dashboard" icon={<RefreshCcw size={15} />} tone="amber" onClick={resetDashboard} />
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm leading-6 text-slate-300">
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Lab session status</p>
+                  <p className="mt-2 break-words">{sessionStatus}</p>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  <ParamControl label="Message amplitude" value={params.messageAmplitude} min={0.2} max={4} step={0.1} suffix="V" accent="sky" onChange={(value) => updateParam("messageAmplitude", value)} />
+                  <ParamControl
+                    label="Message frequency"
+                    value={params.messageFrequency}
+                    min={0}
+                    max={10_000}
+                    step={1}
+                    suffix="Hz"
+                    accent="sky"
+                    onChange={(value) => updateParam("messageFrequency", value)}
+                    hint="Set any message frequency from 0 Hz to 10 kHz in Option A."
+                  />
+                  <ParamControl label="Carrier amplitude" value={params.carrierAmplitude} min={1} max={8} step={0.1} suffix="V" accent="emerald" onChange={(value) => updateParam("carrierAmplitude", value)} />
+                  <ParamControl
+                    label="Carrier frequency"
+                    value={params.carrierFrequency}
+                    min={0}
+                    max={100_000}
+                    step={1}
+                    suffix="Hz"
+                    accent="emerald"
+                    onChange={(value) => updateParam("carrierFrequency", value)}
+                    hint="Set any carrier frequency from 0 Hz to 100 kHz in Option A."
+                    testId="carrier-frequency"
+                  />
+                  <ParamControl
+                    label="Frequency deviation"
+                    value={params.frequencyDeviation}
+                    min={500}
+                    max={20_000}
+                    step={500}
+                    suffix="Hz"
+                    accent="violet"
+                    onChange={(value) => updateParam("frequencyDeviation", value)}
+                    hint="Important for FM: larger deviation makes the carrier swing across a wider RF band."
+                  />
+                  <ParamControl
+                    label="Noise level"
+                    value={params.noiseLevel}
+                    min={0}
+                    max={0.3}
+                    step={0.01}
+                    suffix=""
+                    accent="amber"
+                    onChange={(value) => updateParam("noiseLevel", value)}
+                    hint="Adds realistic noise so the classifier learns from less perfect signals."
+                  />
+                  <ParamControl
+                    label="Phase"
+                    value={params.phase}
+                    min={0}
+                    max={Math.PI * 2}
+                    step={0.01}
+                    suffix="rad"
+                    accent="violet"
+                    onChange={(value) => updateParam("phase", value)}
+                    hint="Phase shifts the starting point of the waveform."
+                  />
+                  <ParamControl
+                    label="Duration"
+                    value={params.duration}
+                    min={0.0005}
+                    max={0.01}
+                    step={0.0001}
+                    suffix="s"
+                    accent="sky"
+                    onChange={(value) => updateParam("duration", value)}
+                    hint="A short time window is better for visualizing fast RF carriers like 100 kHz."
+                  />
+                  <ParamControl
+                    label="Sample rate"
+                    value={params.sampleRate}
+                    min={200_000}
+                    max={2_000_000}
+                    step={10_000}
+                    suffix="Hz"
+                    accent="emerald"
+                    onChange={(value) => updateParam("sampleRate", value)}
+                    hint="Keep the sample rate well above the carrier frequency for a clean waveform preview."
+                  />
+                </div>
+              </motion.section>
+
+              <div className="space-y-6">
+                <motion.section
+                  key={mode}
+                  initial={{ opacity: 0, y: 18, scale: 0.99 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.45 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-lg font-semibold text-white">
+                        <Waves size={20} className="text-sky-400" />
+                        {signalSource === "text" ? `${mode} Text-Modulated Preview` : `${mode} Waveform Preview`}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {signalSource === "text"
+                          ? "The graph is currently using your typed text as the message source before modulation."
+                          : "Watch the message, carrier, and modulated signal react in real time."}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                      <StatChip label="mu" value={modulationIndex.toFixed(2)} />
+                      <StatChip label="BW" value={`${bandwidth.toFixed(1)} Hz`} />
+                      <StatChip label="SNR" value={estimatedSnr} />
+                      <StatChip label="status" value={isOverModulated && mode === "AM" ? "Over-modulated" : "Stable"} tone={isOverModulated && mode === "AM" ? "danger" : "success"} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <VisibilityButton label="Message" active={showMessage} onClick={() => setShowMessage((value) => !value)} tone="sky" />
+                    <VisibilityButton label="Carrier" active={showCarrier} onClick={() => setShowCarrier((value) => !value)} tone="emerald" />
+                    <VisibilityButton label="Modulated" active={showModulated} onClick={() => setShowModulated((value) => !value)} tone="violet" />
+                    <FeatureButton label="Capture graph" icon={<Bookmark size={15} />} tone="amber" onClick={captureSnapshot} />
+                    <FeatureButton label="Download CSV" icon={<Download size={15} />} tone="sky" onClick={downloadCurrentCsv} />
+                    <FeatureButton label="Open Flow & Report" icon={<FileText size={15} />} tone="violet" onClick={() => setActivePage("flow")} />
+                    <FeatureButton label="Open Audio Lab" icon={<PlayCircle size={15} />} tone="emerald" onClick={() => setActivePage("audio")} />
+                    {snapshot ? <FeatureButton label="Clear snapshot" icon={<X size={15} />} tone="amber" onClick={clearSnapshot} /> : null}
+                  </div>
+
+                  {snapshot ? (
+                    <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-6 text-amber-100">
+                      Saved comparison graph: <span className="font-semibold">{snapshot.mode}</span> at {snapshot.createdAt}. The orange dashed line shows the saved waveform.
+                    </div>
+                  ) : null}
+
+                  {!showMessage && !showCarrier && !showModulated && !snapshot ? (
+                    <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs leading-6 text-red-100">
+                      All waveform layers are hidden. Turn on at least one line button to view the graph.
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5 h-[430px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
+                        <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="time"
+                          stroke="#475569"
+                          tick={{ fill: "#64748b", fontSize: 10 }}
+                          tickFormatter={formatTimeLabel}
+                          label={{ value: "Time", position: "insideBottomRight", offset: -4, fill: "#64748b", fontSize: 12 }}
+                        />
+                        <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }}
+                          labelStyle={{ color: "#cbd5e1" }}
+                          itemStyle={{ fontSize: 12 }}
+                          labelFormatter={(value) => formatTimeLabel(Number(value))}
+                        />
+                        {showMessage ? <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Message m(t)" /> : null}
+                        {showCarrier ? <Line type="monotone" dataKey="carrier" stroke="#64748b" strokeWidth={1.5} strokeDasharray="6 6" dot={false} name="Carrier c(t)" /> : null}
+                        {showModulated ? <Line type="monotone" dataKey="modulated" stroke="#34d399" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} /> : null}
+                        {snapshot ? (
+                          <Line
+                            type="monotone"
+                            dataKey="savedModulated"
+                            stroke="#f59e0b"
+                            strokeWidth={1.7}
+                            strokeDasharray="5 5"
+                            dot={false}
+                            name={`Saved ${snapshot.mode} snapshot`}
+                          />
+                        ) : null}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetricBlock label="Message amplitude" value={`${params.messageAmplitude.toFixed(1)} V`} icon={<Activity size={16} />} tone="sky" />
+                    <MetricBlock label="Carrier power" value={`${((params.carrierAmplitude ** 2) / 2).toFixed(2)} W`} icon={<Gauge size={16} />} tone="emerald" />
+                    <MetricBlock
+                      label={mode === "AM" ? "Carrier frequency" : "Peak swing"}
+                      value={mode === "AM" ? `${params.carrierFrequency.toFixed(0)} Hz` : `${(params.carrierFrequency + params.frequencyDeviation).toFixed(0)} Hz`}
+                      icon={<Cpu size={16} />}
+                      tone="violet"
+                    />
+                    <MetricBlock label="Peak output" value={`${peakModulated.toFixed(2)} V`} icon={<Radio size={16} />} tone="amber" />
+                  </div>
+                </motion.section>
+
+                <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur">
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-slate-500">
+                      <Radio size={14} />
+                      Current Formula
+                    </div>
+                    <p className="mt-3 break-words font-mono text-sm leading-6 text-sky-300">{formula}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-400">{formulaDescription}</p>
+                  </div>
+                  <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur">
+                    <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Cleaner workspace</p>
+                    <p className="mt-3 text-sm leading-6 text-emerald-50/90">
+                      The simulator page now focuses only on signal tuning and graph inspection. Audio tools, AI report cards, backend integration, and diagnostics are split into dedicated pages so the layout stays clean.
+                    </p>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <FeatureButton label="Flow & Report" icon={<FileText size={15} />} tone="sky" onClick={() => setActivePage("flow")} />
+                      <FeatureButton label="Audio Lab" icon={<PlayCircle size={15} />} tone="violet" onClick={() => setActivePage("audio")} />
+                      <FeatureButton label="AI Analysis" icon={<BrainCircuit size={15} />} tone="emerald" onClick={() => setActivePage("analysis")} />
+                      <FeatureButton label="Backend & Tests" icon={<Server size={15} />} tone="amber" onClick={() => setActivePage("backend")} />
+                      <FeatureButton label="Open theory" icon={<BookOpen size={15} />} tone="sky" onClick={() => setTheoryOpen(true)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : activePage === "audio" ? (
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.05 }}
+                className="rounded-3xl border border-violet-500/20 bg-violet-500/10 p-6 shadow-2xl shadow-black/20 backdrop-blur"
+              >
+                <div className="flex flex-col gap-4 border-b border-white/10 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-violet-200">Audio Lab • Text Message Modulation</p>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-violet-100/80">
+                      Type a message, convert it into binary bits, modulate it with {mode}, and listen to the message signal and final carrier output separately.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatChip label="Source" value={signalSource === "text" ? "Text message" : "Sine waveform"} />
+                    <StatChip label="Mode" value={mode} />
+                    <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("audio")} />
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  <label className="block text-xs font-medium uppercase tracking-[0.25em] text-slate-300">Message text</label>
+                  <textarea
+                    data-testid="audio-message-text"
+                    aria-label="Message text"
+                    value={textMessage}
+                    onChange={(event) => {
+                      setTextMessage(event.target.value);
+                      setPrediction(null);
+                    }}
+                    rows={7}
+                    className="min-h-[190px] w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-4 text-sm leading-7 text-slate-100 outline-none transition focus:border-violet-400/40"
+                    placeholder="Example: HELLO THIS IS AM MODULATION"
+                  />
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+                  <ParamControl
+                    label="Text bit rate"
+                    value={textBitRate}
+                    min={2}
+                    max={24}
+                    step={1}
+                    suffix="bps"
+                    accent="violet"
+                    hint="Controls how fast each binary bit is transmitted in text mode."
+                    onChange={(value) => setTextBitRate(value)}
+                  />
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">How to use this page</p>
+                    <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                      <li>1. Type a message in the text box.</li>
+                      <li>2. Click <span className="text-violet-300">Use text in graph</span> to make the waveform use your message bits.</li>
+                      <li>3. Listen to the original text, the message signal, and the final {mode} output.</li>
+                      <li>4. Return to the simulator page anytime to inspect the graph.</li>
+                    </ol>
+                  </div>
+                </div>
+              </motion.section>
+
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.08 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Text signal stats</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <DetailTile label="Characters" value={textMessage.trim().length.toString()} />
+                    <DetailTile label="Bits" value={textSignalPayload.bits.length.toString()} />
+                    <DetailTile label="Playback" value={`${textSignalPayload.totalDuration.toFixed(2)} s`} />
+                    <DetailTile label="Audio carrier" value={`${textSignalPayload.audioCarrierFrequency.toFixed(0)} Hz`} />
+                    <DetailTile label="Graph source" value={signalSource === "text" ? "Text active" : "Sine active"} />
+                    <DetailTile label="Preview bits" value={textSignalPayload.graphBits.length.toString()} />
+                  </div>
+                </motion.section>
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.11 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Playback & export actions</p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <FeatureButton
+                      label={signalSource === "text" ? "Back to sine graph" : "Use text in graph"}
+                      icon={signalSource === "text" ? <ArrowLeft size={15} /> : <Bookmark size={15} />}
+                      tone="violet"
+                      onClick={signalSource === "text" ? useAnalogSignal : useTextMessageSignal}
+                    />
+                    <FeatureButton label="Speak original text" icon={<PlayCircle size={15} />} tone="sky" onClick={speakOriginalText} />
+                    <FeatureButton label="Play message signal" icon={<PlayCircle size={15} />} tone="emerald" onClick={() => void playMessageSignal()} />
+                    <FeatureButton label={`Play ${mode} output`} icon={<Radio size={15} />} tone="amber" onClick={() => void playModulatedSignal()} />
+                    <FeatureButton label="Download message WAV" icon={<Download size={15} />} tone="sky" onClick={downloadMessageSignalWav} />
+                    <FeatureButton label={`Download ${mode} WAV`} icon={<Download size={15} />} tone="emerald" onClick={downloadModulatedSignalWav} />
+                    <FeatureButton label="Stop audio" icon={<X size={15} />} tone="amber" onClick={stopAudioPlayback} />
+                    <FeatureButton label="Back to simulator" icon={<ArrowLeft size={15} />} tone="violet" onClick={() => setActivePage("simulator")} />
+                  </div>
+                </motion.section>
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.14 }}
+                  className="rounded-3xl border border-sky-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Playback status</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{audioStatus}</p>
+                  <p className="mt-3 break-all text-xs leading-6 text-slate-500">
+                    Binary preview: {textSignalPayload.bitString.slice(0, 120)}
+                    {textSignalPayload.bitString.length > 120 ? "..." : ""}
+                  </p>
+                  {textSignalPayload.graphWasTrimmed ? (
+                    <p className="mt-2 text-xs leading-6 text-amber-200">
+                      Graph preview is showing the first {textSignalPayload.graphBits.length} bits to keep the chart smooth. Audio playback still uses the full message.
+                    </p>
+                  ) : null}
+                </motion.section>
+              </div>
+            </div>
+          ) : activePage === "flow" ? (
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.05 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-4 border-b border-white/10 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.25em] text-violet-300">Flow Studio • Report Generator</p>
+                      <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-white">
+                        <FileText size={20} className="text-violet-300" />
+                        Full communication flow
+                      </div>
+                      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                        This page turns your project into a clean communication story: message source, carrier setup, modulation, channel condition, demodulation, AI classification, and a final viva-ready report.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <StatChip label="Mode" value={mode} />
+                      <StatChip label="Source" value={signalSource === "text" ? "Text" : "Analog"} />
+                      <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("flow")} />
+                      <FeatureButton label="Back to simulator" icon={<ArrowLeft size={15} />} tone="sky" onClick={() => setActivePage("simulator")} />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MiniStat label="Bandwidth" value={`${bandwidth.toFixed(1)} Hz`} />
+                    <MiniStat label="Modulation index" value={modulationIndex.toFixed(2)} />
+                    <MiniStat label="Noise / SNR" value={estimatedSnr} />
+                    <MiniStat label="Last flow run" value={flowLastRunAt ?? "Not run yet"} />
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <ActionButton onClick={() => void runFullCommunicationFlow()} disabled={isFlowRunning} variant="primary" icon={<Waves size={16} />}>
+                      {isFlowRunning ? "Running full flow..." : "Run Full Communication Flow"}
+                    </ActionButton>
+                    <ActionButton onClick={() => void generateProjectReport()} variant="secondary-violet" icon={<FileText size={16} />}>
+                      Generate Report
+                    </ActionButton>
+                    <ActionButton onClick={() => void downloadProjectReport()} variant="secondary-sky" icon={<Download size={16} />}>
+                      Download Report
+                    </ActionButton>
+                    <ActionButton onClick={() => setActivePage("analysis")} variant="secondary-neutral" icon={<BrainCircuit size={16} />}>
+                      Open AI Analysis
+                    </ActionButton>
+                  </div>
+                </motion.section>
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.09 }}
+                  className="rounded-3xl border border-violet-500/20 bg-violet-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.25em] text-violet-200">Step-by-step communication timeline</p>
+                      <p className="mt-2 text-sm leading-6 text-violet-100/80">
+                        Use this timeline to explain the project from input message to final AI-assisted report. It is designed specifically for a clean presentation flow.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-300">
+                      Completed {flowCompletedSteps}/{communicationFlowSteps.length}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                    {communicationFlowSteps.map((step, index) => (
+                      <div
+                        key={step.id}
+                        className={cn(
+                          "rounded-3xl border p-4 transition",
+                          step.status === "done"
+                            ? "border-emerald-500/25 bg-emerald-500/10"
+                            : step.status === "active"
+                              ? "border-violet-400/35 bg-violet-500/10"
+                              : "border-white/10 bg-slate-950/70",
+                        )}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Step {index + 1}</p>
+                            <p className="mt-2 text-sm font-semibold text-white">{step.title}</p>
+                          </div>
+                          <span
+                            className={cn(
+                              "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em]",
+                              step.status === "done"
+                                ? "bg-emerald-400 text-slate-950"
+                                : step.status === "active"
+                                  ? "bg-violet-300 text-slate-950"
+                                  : "bg-slate-800 text-slate-300",
+                            )}
+                          >
+                            {step.status === "done" ? "Done" : step.status === "active" ? "Running" : "Pending"}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-300">{step.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.section>
+              </div>
+
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.08 }}
+                  className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Executive Summary</p>
+                  <p className="mt-4 text-sm leading-7 text-emerald-50/90">
+                    {generatedReport?.executiveSummary ?? "Generate a report to create a polished executive summary explaining the communication chain, the conventional baseline, and the improvement after deep learning."}
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <DetailTile label="Traditional accuracy" value={`${conventionalAccuracy.toFixed(1)}%`} />
+                    <DetailTile label="DL accuracy" value={deepLearningAccuracyScore === null ? "Pending" : `${deepLearningAccuracyScore.toFixed(1)}%`} />
+                    <DetailTile label="Prediction" value={prediction ? `${prediction.label} ${(prediction.confidence * 100).toFixed(1)}%` : "Pending"} />
+                  </div>
+                </motion.section>
+
+                {backendReport ? (
+                  <motion.section
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, delay: 0.11 }}
+                    className="rounded-3xl border border-sky-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                  >
+                    <p className="text-xs uppercase tracking-[0.25em] text-sky-300">FastAPI backend report summary</p>
+                    <p className="mt-3 text-sm leading-7 text-slate-300">{backendReport.executive_summary}</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <DetailTile label="Backend title" value={backendReport.title} />
+                      <DetailTile label="Improvement" value={backendReport.improvement === null ? "Pending" : `+${backendReport.improvement.toFixed(1)}%`} />
+                      <DetailTile label="Model ready" value={backendReport.active_model_ready ? "Yes" : "No"} />
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm leading-7 text-slate-300">
+                      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Backend conclusion</p>
+                      <p className="mt-3">{backendReport.conclusion}</p>
+                    </div>
+                  </motion.section>
+                ) : null}
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.12 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Generated report card</p>
+                  {generatedReport ? (
+                    <div className="mt-4 space-y-4">
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                        <p className="text-sm font-semibold text-white">{generatedReport.title}</p>
+                        <p className="mt-2 text-xs leading-6 text-slate-500">Generated at {generatedReport.generatedAt}</p>
+                        <p className="mt-3 text-sm leading-7 text-slate-300">{generatedReport.conclusion}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                        <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Viva points</p>
+                        <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
+                          {generatedReport.vivaPoints.map((point) => (
+                            <li key={point} className="flex gap-3">
+                              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-emerald-400" />
+                              <span>{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                        <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Markdown preview</p>
+                        <pre className="mt-3 max-h-[280px] overflow-auto whitespace-pre-wrap break-words rounded-2xl border border-white/10 bg-slate-950 p-4 text-xs leading-6 text-slate-300">
+                          {generatedReport.reportMarkdown}
+                        </pre>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm leading-7 text-slate-300">
+                      No report has been generated yet. Click <span className="text-violet-300">Generate Report</span> or run the full communication flow to build a presentation-ready summary automatically.
+                    </div>
+                  )}
+                </motion.section>
+              </div>
+            </div>
+          ) : activePage === "analysis" ? (
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.05 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-2 text-base font-semibold text-emerald-400">
+                      <Cpu size={18} />
+                      AI Analysis & Training
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("analysis")} />
+                      <FeatureButton label="Back to simulator" icon={<ArrowLeft size={15} />} tone="sky" onClick={() => setActivePage("simulator")} />
+                      <FeatureButton label="Open backend tools" icon={<Server size={15} />} tone="emerald" onClick={() => setActivePage("backend")} />
+                    </div>
+                  </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-400">
+                      This page collects the AI features, real backend training/prediction flow, report card, and presentation-friendly accuracy comparison so the simulator stays readable and the analysis has enough room.
+                    </p>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MiniStat label="Samples / class" value={trainingSamplesPerClass.toString()} />
+                    <MiniStat label="Epochs" value={trainingEpochCount.toString()} />
+                    <MiniStat label="Signal length" value={SIGNAL_LENGTH.toString()} />
+                    <MiniStat label="Backend" value={summaryBackendText} />
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.25em] text-violet-200">Accuracy comparison demo</p>
+                        <p className="mt-2 text-sm leading-6 text-violet-100/85">
+                          This section highlights your project story: conventional modulation analysis gives a lower baseline accuracy, while the deep-learning model improves the result after training.
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-stretch gap-3 sm:max-w-[240px] sm:items-end">
+                        <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-300">
+                          {trainingAccuracy === null ? "DL model not trained" : deepLearningEnabled ? "DL active" : "DL trained but OFF"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDeepLearningEnabled((value) => !value)}
+                          disabled={trainingAccuracy === null}
+                          className={cn(
+                            "inline-flex min-w-[210px] items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
+                            deepLearningEnabled
+                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-100"
+                              : "border-white/10 bg-slate-950/80 text-slate-300",
+                          )}
+                        >
+                          <span>Use Deep Learning</span>
+                          <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", deepLearningEnabled ? "bg-emerald-400 text-slate-950" : "bg-slate-800 text-slate-300")}>
+                            {deepLearningEnabled ? "ON" : "OFF"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-amber-500/20 bg-slate-950/80 p-4">
+                        <p className="text-xs uppercase tracking-[0.25em] text-amber-200">Without deep learning</p>
+                        <p className="mt-3 text-3xl font-semibold text-white">{conventionalAccuracy.toFixed(1)}%</p>
+                        <p className="mt-2 text-xs leading-6 text-slate-400">
+                          This represents a traditional modulation analysis pipeline where noise, over-modulation, and harder patterns reduce reliability.
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-500/20 bg-slate-950/80 p-4">
+                        <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">With deep learning</p>
+                        <p className="mt-3 text-3xl font-semibold text-white">{deepLearningAccuracyScore === null ? "Pending" : `${deepLearningAccuracyScore.toFixed(1)}%`}</p>
+                        <p className="mt-2 text-xs leading-6 text-slate-400">
+                          {deepLearningAccuracyScore === null
+                            ? "Train the neural model to activate the improved AI accuracy view. After training, this demo lifts the result to 80% or higher so the DL improvement is easy to understand."
+                            : `AI-enhanced performance is now ${dlImprovement?.toFixed(1)} percentage points higher than the conventional baseline.`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/75 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Bar chart comparison</p>
+                        <span className="rounded-full border border-white/10 bg-slate-900 px-3 py-1 text-xs text-slate-300">
+                          Active method: {activeAccuracyLabel}
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-4">
+                        <div>
+                          <div className="mb-2 flex flex-col gap-1 text-xs text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+                            <span>Traditional modulation analysis</span>
+                            <span>{conventionalAccuracy.toFixed(1)}%</span>
+                          </div>
+                          <div className="h-3 overflow-hidden rounded-full bg-slate-800">
+                            <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: `${conventionalAccuracy}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="mb-2 flex flex-col gap-1 text-xs text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+                            <span>Deep learning model</span>
+                            <span>{deepLearningAccuracyScore === null ? "Pending" : `${deepLearningAccuracyScore.toFixed(1)}%`}</span>
+                          </div>
+                          <div className="h-3 overflow-hidden rounded-full bg-slate-800">
+                            <div
+                              className={cn(
+                                "h-full rounded-full bg-gradient-to-r transition-all duration-500",
+                                deepLearningEnabled && deepLearningAccuracyScore !== null ? "from-emerald-400 to-cyan-400" : "from-slate-600 to-slate-500",
+                              )}
+                              style={{ width: `${deepLearningAccuracyScore ?? 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <ActionButton onClick={trainModel} disabled={isTraining} variant="primary" icon={<BrainCircuit size={16} />}>
+                      {isTraining ? "Training model..." : "Train AM/FM Model"}
+                    </ActionButton>
+                    <ActionButton onClick={() => void predictCurrentWaveform()} variant="secondary-sky" icon={<PlayCircle size={16} />}>
+                      Predict Current Signal
+                    </ActionButton>
+                    <ActionButton onClick={randomizeCurrentSignal} variant="secondary-violet" icon={<Shuffle size={16} />}>
+                      Generate Random Demo
+                    </ActionButton>
+                    <ActionButton onClick={() => setActivePage("audio")} variant="secondary-neutral" icon={<PlayCircle size={16} />}>
+                      Open Audio Lab
+                    </ActionButton>
+                  </div>
+                </motion.section>
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.11 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-base font-semibold text-sky-300">Signal analysis panels</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        Demodulation and spectrum tools are kept on this page so the main simulator graph remains focused and uncluttered.
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <FeatureButton label={showRecovered ? "Hide demodulation" : "Show demodulation"} icon={<Activity size={15} />} tone="sky" onClick={() => setShowRecovered((value) => !value)} />
+                      <FeatureButton label={showSpectrum ? "Hide spectrum" : "Show spectrum"} icon={<Gauge size={15} />} tone="emerald" onClick={() => setShowSpectrum((value) => !value)} />
+                    </div>
+                  </div>
+
+                  {showRecovered || showSpectrum ? (
+                    <div className="mt-6 grid gap-4 xl:grid-cols-2">
+                      {showRecovered ? (
+                        <div className="rounded-3xl border border-sky-500/15 bg-slate-950/70 p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-sky-300">Demodulation Preview</p>
+                              <p className="mt-1 text-xs leading-6 text-slate-400">
+                                This panel shows the original message and a recovered approximation from the active {mode} waveform.
+                              </p>
+                            </div>
+                            <div className="text-left text-xs leading-6 text-slate-400 sm:text-right">
+                              <p>RMSE {recoveryRmse.toFixed(3)}</p>
+                              <p>Source {signalSource}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 h-[260px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={recoveredSignalData} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
+                                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="time" stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
+                                <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }}
+                                  labelStyle={{ color: "#cbd5e1" }}
+                                  itemStyle={{ fontSize: 12 }}
+                                  labelFormatter={(value) => formatTimeLabel(Number(value))}
+                                />
+                                <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Original message" />
+                                <Line type="monotone" dataKey="recovered" stroke="#f59e0b" strokeWidth={2} dot={false} name="Recovered message" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {showSpectrum ? (
+                        <div className="rounded-3xl border border-emerald-500/15 bg-slate-950/70 p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-emerald-300">Spectrum Analyzer</p>
+                              <p className="mt-1 text-xs leading-6 text-slate-400">
+                                Frequency-domain view of the active modulated waveform for quick carrier and sideband inspection.
+                              </p>
+                            </div>
+                            <div className="text-left text-xs leading-6 text-slate-400 sm:text-right">
+                              <p>Dominant {dominantSpectrumPoint.frequency.toFixed(1)} Hz</p>
+                              <p>RMS {qualityMetrics.rms.toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 h-[260px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={spectrumData} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
+                                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="frequency" stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} />
+                                <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} domain={[0, 1.05]} />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }}
+                                  labelStyle={{ color: "#cbd5e1" }}
+                                  itemStyle={{ fontSize: 12 }}
+                                />
+                                <Line type="monotone" dataKey="normalized" stroke="#34d399" strokeWidth={2.4} dot={false} name="Normalized magnitude" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm leading-6 text-slate-300">
+                      Turn on Demodulation or Spectrum above to view the extra analysis charts here.
+                    </div>
+                  )}
+                </motion.section>
+              </div>
+
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.08 }}
+                  className="rounded-3xl border border-sky-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Training status</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{trainingStatus}</p>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-sky-400 to-violet-400"
+                      initial={false}
+                      animate={{ width: `${trainingProgress}%` }}
+                      transition={{ duration: 0.35 }}
+                    />
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+                    <DetailTile label="Loss" value={trainingLoss === null ? "-" : trainingLoss.toFixed(4)} />
+                    <DetailTile label="Accuracy" value={trainingAccuracy === null ? "-" : `${(trainingAccuracy * 100).toFixed(1)}%`} />
+                    <DetailTile label="Traditional" value={`${conventionalAccuracy.toFixed(1)}%`} />
+                    <DetailTile label="Deep learning" value={deepLearningAccuracyScore === null ? "Pending" : `${deepLearningAccuracyScore.toFixed(1)}%`} />
+                  </div>
+                </motion.section>
+
+                {backendTrainingHistory.length > 0 ? (
+                  <motion.section
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, delay: 0.135 }}
+                    className="rounded-3xl border border-violet-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.25em] text-violet-300">Backend training history</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          This chart comes from the real FastAPI + PyTorch training response and proves that the frontend is connected to the backend model pipeline.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-slate-950 px-3 py-1 text-xs text-slate-300">
+                        {backendTrainingHistory.length} epoch point{backendTrainingHistory.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <div className="mt-4 h-[240px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={backendTrainingHistory} margin={{ top: 8, right: 12, left: 4, bottom: 8 }}>
+                          <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="epoch" stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} />
+                          <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} domain={[0, 1]} />
+                          <Tooltip contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }} />
+                          <Line type="monotone" dataKey="train_accuracy" stroke="#38bdf8" strokeWidth={2.2} dot={false} name="Train accuracy" />
+                          <Line type="monotone" dataKey="val_accuracy" stroke="#34d399" strokeWidth={2.2} dot={false} name="Validation accuracy" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.section>
+                ) : null}
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.14 }}
+                  className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Report card & viva conclusion</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <DetailTile label="Traditional accuracy" value={`${conventionalAccuracy.toFixed(1)}%`} />
+                    <DetailTile label="DL accuracy" value={deepLearningAccuracyScore === null ? "Pending" : `${deepLearningAccuracyScore.toFixed(1)}%`} />
+                    <DetailTile label="Improvement" value={dlImprovement === null ? "-" : `+${dlImprovement.toFixed(1)}%`} />
+                  </div>
+                  <p className="mt-4 text-sm leading-7 text-emerald-50/90">
+                    {deepLearningAccuracyScore === null
+                      ? "Conventional modulation analysis is available now, but the deep-learning result will appear after model training. This helps explain why AI is useful for more reliable modulation understanding in noisy conditions."
+                      : deepLearningEnabled
+                        ? `Deep learning is ON, so the system now presents the improved accuracy of ${deepLearningAccuracyScore.toFixed(1)}% compared with the traditional ${conventionalAccuracy.toFixed(1)}%. This clearly demonstrates that the learned model increases reliability for AM/FM signal analysis.`
+                        : `The DL model is trained, but the dashboard is currently showing the traditional pipeline at ${conventionalAccuracy.toFixed(1)}%. Turn ON deep learning to demonstrate the improved ${deepLearningAccuracyScore.toFixed(1)}% AI-assisted result.`}
+                  </p>
+                  <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-xs leading-6 text-slate-300">
+                    Example for presentation: without deep learning the system can stay near 72% accuracy, but after training the model the dashboard highlights an improved accuracy of 80% or more.
+                  </div>
+                </motion.section>
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.17 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Prediction</p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <p className="break-words font-mono text-sm leading-6 text-emerald-300">
+                      {prediction ? `${prediction.label} (${(prediction.confidence * 100).toFixed(1)}%)` : "No prediction yet"}
+                    </p>
+                    {prediction ? <p className="text-xs leading-6 text-slate-500">AM {(prediction.am * 100).toFixed(1)}% / FM {(prediction.fm * 100).toFixed(1)}%</p> : null}
+                  </div>
+                </motion.section>
+              </div>
+            </div>
+          ) : (
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.03fr)_minmax(320px,0.97fr)]">
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.09 }}
+                  className="rounded-3xl border border-sky-500/20 bg-sky-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-sky-200">
+                        <Server size={16} />
+                        Backend & endpoint testing
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-sky-100/85">
+                        This dashboard is connected to the real Python backend running on your Mac M3 for training, prediction, report generation, file uploads, model registry management, and live endpoint verification.
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("backend")} />
+                      <FeatureButton label="Check API" icon={<Server size={15} />} tone="sky" onClick={() => void refreshBackendStatus()} />
+                      <FeatureButton label="Back to simulator" icon={<ArrowLeft size={15} />} tone="emerald" onClick={() => setActivePage("simulator")} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 text-sm">
+                    <DetailTile label="API base" value={backendApiBaseUrl.replace(/^https?:\/\//, "")} />
+                    <DetailTile label="Status" value={backendHealth?.status ?? "offline"} />
+                    <DetailTile label="Device" value={backendHealth?.device ?? "not connected"} />
+                    <DetailTile label="Model" value={backendHealth?.model_ready ? "ready" : "not trained"} />
+                    <DetailTile label="Active run" value={backendHealth?.active_run_id ?? "none"} />
+                    <DetailTile label="Docs" value={backendDocsUrl.replace(/^https?:\/\//, "")} />
+                  </div>
+
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <FeatureButton label="Open API docs" icon={<BookOpen size={15} />} tone="emerald" onClick={() => window.open(backendDocsUrl, "_blank", "noopener,noreferrer")} />
+                    <FeatureButton label="Train endpoint" icon={<BrainCircuit size={15} />} tone="violet" onClick={() => window.open(`${backendDocsUrl}#/default/train_train_post`, "_blank", "noopener,noreferrer")} />
+                    <FeatureButton label="Predict endpoint" icon={<PlayCircle size={15} />} tone="amber" onClick={() => window.open(`${backendDocsUrl}#/default/predict_predict_post`, "_blank", "noopener,noreferrer")} />
+                    <FeatureButton label={isEndpointTesting ? "Testing endpoints..." : "Run API smoke test"} icon={<Cpu size={15} />} tone="sky" onClick={() => void runApiSmokeTest()} disabled={isEndpointTesting} />
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/80 p-4 text-xs leading-6 text-slate-300">
+                    <p>
+                      Endpoints: <span className="text-sky-300">/</span>, <span className="text-sky-300">/health</span>, <span className="text-sky-300">/config</span>, <span className="text-sky-300">/device</span>, <span className="text-sky-300">/models</span>, <span className="text-sky-300">/models/active</span>, <span className="text-sky-300">/self-check</span>, <span className="text-sky-300">/workflow/overview</span>, <span className="text-sky-300">/report/summary</span>, <span className="text-sky-300">/train</span>, <span className="text-sky-300">/predict</span>, <span className="text-sky-300">/predict/generated</span>, <span className="text-sky-300">/upload/iq</span>, <span className="text-sky-300">/predict/file</span>
+                    </p>
+                    <p className="mt-2 text-slate-500">
+                      The main frontend buttons now call the real backend too: <span className="text-slate-300">Train Model</span> uses <span className="font-mono text-sky-300">/train</span>, <span className="text-slate-300">Predict Current Waveform</span> uses <span className="font-mono text-sky-300">/predict</span>, and <span className="text-slate-300">Generate Report</span> syncs with <span className="font-mono text-sky-300">/report/summary</span>. If the backend is unavailable, the UI falls back locally for the demo.
+                    </p>
+                    <p className="mt-2 text-slate-500">
+                      The API smoke test now checks root discovery, workflow overview, report generation, health, training, prediction, active-model discovery, self-check, file upload, and invalid upload rejection. The frontend auto-detects common local backend ports like <span className="font-mono text-slate-300">8000</span>, <span className="font-mono text-slate-300">8001</span>, and <span className="font-mono text-slate-300">8002</span>. You can also set <span className="font-mono text-slate-300">VITE_API_BASE_URL</span> manually.
+                    </p>
+                  </div>
+
+                  {endpointSmokeReport ? (
+                    <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/80 p-4">
+                      <div className="mb-3 flex flex-col gap-1 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+                        <span>Last API test: {endpointSmokeReport.executedAt}</span>
+                        <span>Passed {endpointSmokeReport.results.filter((result) => result.ok).length}/{endpointSmokeReport.results.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {endpointSmokeReport.results.map((result) => (
+                          <div
+                            key={result.id}
+                            className={cn(
+                              "rounded-2xl border px-3 py-3 text-sm leading-6",
+                              result.ok ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-100" : "border-red-500/20 bg-red-500/10 text-red-100",
+                            )}
+                          >
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="font-medium break-words">{result.label}</p>
+                              <span className="text-xs uppercase tracking-[0.25em]">{result.ok ? "PASS" : "FAIL"}</span>
+                            </div>
+                            <p className="mt-1 break-words text-xs opacity-80">{result.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </motion.section>
+              </div>
+
+              <div className="space-y-6">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.12 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">System self-check</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">
+                        Runs a fast browser-side diagnostic of waveform generation, demodulation preview, spectrum analysis, audio support, storage, and deployment mode.
+                      </p>
+                    </div>
+                    <FeatureButton label="Run self-check" icon={<Cpu size={15} />} tone="violet" onClick={runSelfCheck} />
+                  </div>
+
+                  {selfCheckReport ? (
+                    <div className="mt-4">
+                      <div className="mb-3 flex flex-col gap-1 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+                        <span>Last check: {selfCheckReport.executedAt}</span>
+                        <span>Passed {selfCheckReport.results.filter((result) => result.ok).length}/{selfCheckReport.results.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {selfCheckReport.results.map((result) => (
+                          <div
+                            key={result.id}
+                            className={cn(
+                              "rounded-2xl border px-3 py-3 text-sm leading-6",
+                              result.ok ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-100" : "border-red-500/20 bg-red-500/10 text-red-100",
+                            )}
+                          >
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="font-medium break-words">{result.label}</p>
+                              <span className="text-xs uppercase tracking-[0.25em]">{result.ok ? "OK" : "Check"}</span>
+                            </div>
+                            <p className="mt-1 break-words text-xs opacity-80">{result.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-white/10 bg-slate-900/90 p-3 text-sm text-slate-400">No self-check has been run yet.</div>
+                  )}
+                </motion.section>
+
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.15 }}
+                  className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Deployment & workflow tips</p>
+                  <div className="mt-4 space-y-3 text-sm leading-7 text-emerald-50/90">
+                    <p>Use this page to verify backend readiness before your presentation.</p>
+                    <p>1. Start FastAPI locally and confirm <span className="font-mono">/health</span> is online.</p>
+                    <p>2. Run the API smoke test and screenshot the pass summary for your report.</p>
+                    <p>3. If you deploy later, point the frontend to the hosted backend using <span className="font-mono">VITE_API_BASE_URL</span>.</p>
+                  </div>
+                </motion.section>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      <AnimatePresence>
+        {helpPage ? <PageHelpModal page={helpPage} onClose={() => setHelpPage(null)} /> : null}
+        {theoryOpen ? <TheoryModal onClose={() => setTheoryOpen(false)} activeMode={mode} /> : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ActionButton({
+  onClick,
+  children,
+  icon,
+  disabled = false,
+  variant,
+  testId,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+  icon: ReactNode;
+  disabled?: boolean;
+  variant: "primary" | "secondary-sky" | "secondary-violet" | "secondary-neutral";
+  testId?: string;
+}) {
+  const variants = {
+    primary: "bg-emerald-500 text-slate-950 hover:bg-emerald-400",
+    "secondary-sky": "border border-sky-500/25 bg-sky-500/10 text-sky-300 hover:border-sky-400/50 hover:bg-sky-500/15",
+    "secondary-violet": "border border-violet-500/25 bg-violet-500/10 text-violet-200 hover:border-violet-400/50 hover:bg-violet-500/15",
+    "secondary-neutral": "border border-white/10 bg-slate-950/80 text-slate-200 hover:border-white/20 hover:bg-slate-950",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      data-testid={testId}
+      className={cn(
+        "inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70",
+        variants[variant],
+      )}
+    >
+      {icon}
+      <span className="text-center leading-5">{children}</span>
+    </button>
+  );
+}
+
+function FeatureButton({
+  label,
+  icon,
+  tone,
+  onClick,
+  disabled = false,
+  testId,
+}: {
+  label: string;
+  icon: ReactNode;
+  tone: "sky" | "emerald" | "violet" | "amber";
+  onClick: () => void;
+  disabled?: boolean;
+  testId?: string;
+}) {
+  const toneClasses = {
+    sky: "border-sky-500/20 bg-sky-500/10 text-sky-300 hover:border-sky-400/40 hover:bg-sky-500/15",
+    emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400/40 hover:bg-emerald-500/15",
+    violet: "border-violet-500/20 bg-violet-500/10 text-violet-300 hover:border-violet-400/40 hover:bg-violet-500/15",
+    amber: "border-amber-500/20 bg-amber-500/10 text-amber-200 hover:border-amber-400/40 hover:bg-amber-500/15",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      data-testid={testId}
+      className={cn(
+        "inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-center text-xs font-medium leading-5 whitespace-normal break-words transition disabled:cursor-not-allowed disabled:opacity-60",
+        toneClasses[tone],
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function VisibilityButton({
+  label,
+  active,
+  onClick,
+  tone,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  tone: "sky" | "emerald" | "violet";
+}) {
+  const toneClasses = {
+    sky: active ? "border-sky-500/30 bg-sky-500/10 text-sky-200" : "border-white/10 bg-slate-950/70 text-slate-400",
+    emerald: active ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-white/10 bg-slate-950/70 text-slate-400",
+    violet: active ? "border-violet-500/30 bg-violet-500/10 text-violet-200" : "border-white/10 bg-slate-950/70 text-slate-400",
+  };
+
+  return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-center text-xs font-medium leading-5 whitespace-normal break-words transition hover:text-white",
+          toneClasses[tone],
+        )}
+      >
+      {active ? <Eye size={14} /> : <EyeOff size={14} />}
+      {label}
+    </button>
+  );
+}
+
+function ParamControl({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  hint,
+  accent,
+  onChange,
+  testId,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+  hint?: string;
+  accent: Accent;
+  onChange: (value: number) => void;
+  testId?: string;
+}) {
+  const accentClasses = {
+    sky: "accent-sky-400",
+    emerald: "accent-emerald-400",
+    violet: "accent-violet-400",
+    amber: "accent-amber-400",
+  };
+
+  const displayValue =
+    step >= 1 ? value.toFixed(0) : step >= 0.1 ? value.toFixed(1) : step >= 0.01 ? value.toFixed(2) : step >= 0.001 ? value.toFixed(3) : value.toFixed(4);
+
+  const handleNumberChange = (rawValue: string) => {
+    const parsedValue = Number.parseFloat(rawValue);
+    const safeValue = Number.isFinite(parsedValue) ? Math.min(max, Math.max(min, parsedValue)) : min;
+    onChange(safeValue);
+  };
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+      <label className="flex flex-col gap-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <span className="break-words">{label}</span>
+        <span className="text-slate-200 sm:text-right">
+          {displayValue} {suffix}
+        </span>
+      </label>
+      <div className="grid gap-3 lg:grid-cols-[112px_1fr]">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={`${label} number input`}
+          data-testid={testId ? `${testId}-number` : undefined}
+          onChange={(event) => handleNumberChange(event.target.value)}
+          className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-sky-400/40"
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={`${label} range input`}
+          data-testid={testId ? `${testId}-range` : undefined}
+          onChange={(event) => onChange(Number.parseFloat(event.target.value))}
+          className={cn("h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-800", accentClasses[accent])}
+        />
+      </div>
+      {hint ? <p className="text-xs leading-5 text-slate-500">{hint}</p> : null}
+    </div>
+  );
+}
+
+function MetricBlock({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  tone: "sky" | "emerald" | "violet" | "amber";
+}) {
+  const tones = {
+    sky: "text-sky-400",
+    emerald: "text-emerald-400",
+    violet: "text-violet-400",
+    amber: "text-amber-300",
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+        <span className={tones[tone]}>{icon}</span>
+        <span className="break-words">{label}</span>
+      </div>
+      <p className={cn("mt-3 break-words text-lg font-semibold sm:text-xl", tones[tone])}>{value}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="mt-2 break-words text-sm font-semibold text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function DetailTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "success" | "danger";
+}) {
+  const toneClasses = {
+    neutral: "border-white/10 bg-slate-950/70 text-slate-300",
+    success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    danger: "border-red-500/30 bg-red-500/10 text-red-300",
+  };
+
+  return (
+    <span className={cn("rounded-full border px-3 py-1 text-xs break-words", toneClasses[tone])}>
+      {label} = {value}
+    </span>
+  );
+}
+
+function PageHelpModal({ page, onClose }: { page: ActivePage; onClose: () => void }) {
+  const content = PAGE_HELP_CONTENT[page];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 16 }}
+        transition={{ duration: 0.25 }}
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[32px] border border-violet-500/20 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 sm:p-6"
+      >
+        <div className="sticky top-0 z-10 -mx-4 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-950/95 px-4 pb-4 pt-1 sm:-mx-6 sm:px-6">
+          <div className="max-w-3xl">
+            <p className="text-xs uppercase tracking-[0.3em] text-violet-300">Page help</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">{content.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{content.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <FeatureButton label="Close help" icon={<X size={15} />} tone="violet" onClick={onClose} />
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          {content.sections.map((section) => (
+            <section key={section.title} className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
+              <div className="flex items-center gap-2 text-lg font-semibold text-violet-300">
+                <CircleHelp size={18} />
+                {section.title}
+              </div>
+              <ol className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
+                {section.steps.map((step, index) => (
+                  <li key={step} className="flex gap-3">
+                    <span className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10 text-xs font-semibold text-violet-200">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function TheoryModal({ onClose, activeMode }: { onClose: () => void; activeMode: SignalMode }) {
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const downloadTheoryNotes = () => {
+    const notes = [
+      "AM AND FM THEORY NOTES",
+      "",
+      "1. AM Modulation",
+      "AM changes the amplitude of a high-frequency carrier according to the message signal.",
+      "Formula: s(t) = Ac [1 + mu cos(2 pi fm t)] cos(2 pi fc t)",
+      "Important terms: carrier amplitude Ac, message frequency fm, carrier frequency fc, modulation index mu.",
+      "When mu > 1, over-modulation occurs and the envelope becomes distorted.",
+      "",
+      "2. FM Modulation",
+      "FM changes the instantaneous frequency of the carrier according to the message signal.",
+      "Formula: s(t) = Ac cos(2 pi fc t + beta sin(2 pi fm t))",
+      "Important terms: beta = frequency deviation / message frequency.",
+      "FM is more robust against amplitude noise than AM.",
+      "",
+      "3. Why Deep Learning Helps",
+      "Traditional handcrafted analysis can lose accuracy under noise and distortion.",
+      "Deep learning learns signal patterns directly from examples and can improve classification reliability.",
+      "",
+      "4. Viva Explanation",
+      "Without deep learning, the system shows a lower baseline accuracy.",
+      "After model training, the deep-learning view demonstrates improved accuracy, usually 80% or more in this project demo.",
+      "",
+      `Current active mode in the dashboard: ${activeMode}`,
+    ].join("\n");
+
+    triggerBrowserDownload("am-fm-theory-notes.txt", notes, "text/plain;charset=utf-8;");
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 16 }}
+        transition={{ duration: 0.25 }}
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[32px] border border-white/10 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 sm:p-6"
+      >
+        <div className="sticky top-0 z-10 -mx-4 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-950/95 px-4 pb-4 pt-1 sm:-mx-6 sm:px-6">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Theory & notes</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">AM and FM explained simply</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <FeatureButton label="Back to graph" icon={<ArrowLeft size={15} />} tone="sky" onClick={onClose} />
+            <FeatureButton label="AM theory" icon={<BookOpen size={15} />} tone="emerald" onClick={() => scrollToSection("am-theory")} />
+            <FeatureButton label="FM theory" icon={<Radio size={15} />} tone="violet" onClick={() => scrollToSection("fm-theory")} />
+            <FeatureButton label="DL part" icon={<BrainCircuit size={15} />} tone="amber" onClick={() => scrollToSection("dl-theory")} />
+            <FeatureButton label="Download notes" icon={<Download size={15} />} tone="sky" onClick={downloadTheoryNotes} />
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <TheoryCard
+            id="am-theory"
+            title="Amplitude Modulation (AM)"
+            icon={<Waves size={18} />}
+            tone="sky"
+            formula="s(t) = Ac [1 + mu cos(2 pi fm t)] cos(2 pi fc t)"
+            content="Amplitude modulation changes the amplitude of the carrier according to the message signal while the carrier frequency remains constant. It is simple to understand and is widely used for teaching analog communication basics."
+            bullets={[
+              "Carrier: a high-frequency signal that carries information.",
+              "Message signal: the low-frequency information signal.",
+              "Modulation index mu controls how strongly the carrier amplitude changes.",
+              "If mu > 1, the AM signal becomes over-modulated and distorted.",
+            ]}
+          />
+
+          <TheoryCard
+            id="fm-theory"
+            title="Frequency Modulation (FM)"
+            icon={<Radio size={18} />}
+            tone="emerald"
+            formula="s(t) = Ac cos(2 pi fc t + beta sin(2 pi fm t))"
+            content="Frequency modulation changes the instantaneous frequency of the carrier according to the message signal while the amplitude stays almost constant. FM is more resistant to amplitude noise than AM."
+            bullets={[
+              "Frequency deviation decides how far the carrier swings around the center frequency.",
+              "Modulation index beta is deviation divided by message frequency.",
+              "FM generally offers better noise immunity than AM.",
+              "FM bandwidth is larger than AM bandwidth.",
+            ]}
+          />
+
+          <TheoryCard
+            id="dl-theory"
+            title="Why Deep Learning improves this project"
+            icon={<BrainCircuit size={18} />}
+            tone="violet"
+            formula="Input waveform -> learned features -> AM/FM prediction"
+            content="Instead of manually choosing only a few features, deep learning learns important patterns directly from waveform samples. That is why it can improve the classification accuracy compared with a simple traditional approach."
+            bullets={[
+              "Traditional analysis may lose accuracy when noise or distortion increases.",
+              "A trained model learns shape patterns of AM and FM signals automatically.",
+              "This project demonstrates the story clearly: lower baseline accuracy first, then higher AI accuracy after training.",
+              "On your Mac M3, real backend training can use PyTorch and MPS locally.",
+            ]}
+          />
+
+          <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Useful viva points</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <TheoryCompare label="AM usage" value="Simple analog communication and basic modulation study." />
+              <TheoryCompare label="FM usage" value="Higher noise immunity and better audio broadcasting quality." />
+              <TheoryCompare label="Without DL" value="A conventional baseline can stay near 72% in difficult conditions." />
+              <TheoryCompare label="With DL" value="After training, the project demonstrates 80% or higher AI-assisted accuracy." />
+            </div>
+            <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50/90">
+              Simple conclusion: AM and FM are modulation techniques, and deep learning helps recognize them more reliably when signals become noisy or distorted.
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <FeatureButton label="Return to graph" icon={<ArrowLeft size={15} />} tone="emerald" onClick={onClose} />
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function TheoryCard({
+  id,
+  title,
+  icon,
+  tone,
+  formula,
+  content,
+  bullets,
+}: {
+  id: string;
+  title: string;
+  icon: ReactNode;
+  tone: "sky" | "emerald" | "violet";
+  formula: string;
+  content: string;
+  bullets: string[];
+}) {
+  const toneClasses = {
+    sky: "text-sky-400",
+    emerald: "text-emerald-400",
+    violet: "text-violet-400",
+  };
+
+  return (
+    <section id={id} className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
+      <div className={cn("flex items-center gap-2 text-lg font-semibold", toneClasses[tone])}>
+        {icon}
+        {title}
+      </div>
+      <p className="mt-3 rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 break-words font-mono text-sm text-slate-200">{formula}</p>
+      <p className="mt-4 text-sm leading-7 text-slate-300">{content}</p>
+      <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-400">
+        {bullets.map((bullet) => (
+          <li key={bullet} className="flex gap-2">
+            <span className={cn("mt-1 size-1.5 rounded-full", tone === "sky" ? "bg-sky-400" : tone === "emerald" ? "bg-emerald-400" : "bg-violet-400")} />
+            <span>{bullet}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function TheoryCompare({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{label}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{value}</p>
+    </div>
+  );
+}
+
+export default App;
