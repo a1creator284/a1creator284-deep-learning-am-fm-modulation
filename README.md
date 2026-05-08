@@ -8,6 +8,7 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
+| 2026-05-09 | Fixed help modal overlap on scroll — removed sticky header inside scrollable container; outer overlay now scrolls, modal card is fully opaque with no bleed-through |
 | 2026-05-09 | Simulator graphs — switched from cramped 3-column grid to full-width stacked layout; each graph now 340 px tall with axis labels, colored borders, larger tick text; combined overlay graph 380 px |
 | 2026-05-09 | Added Combined Signal View overlay graph + Legend; individual graph heights increased to 280 px with axis labels |
 

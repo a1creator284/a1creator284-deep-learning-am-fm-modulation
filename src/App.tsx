@@ -3218,7 +3218,7 @@ function PageHelpModal({ page, onClose }: { page: ActivePage; onClose: () => voi
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/85 px-4 py-10 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
@@ -3227,9 +3227,10 @@ function PageHelpModal({ page, onClose }: { page: ActivePage; onClose: () => voi
         exit={{ opacity: 0, scale: 0.98, y: 16 }}
         transition={{ duration: 0.25 }}
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[32px] border border-violet-500/20 bg-slate-950/95 p-4 shadow-2xl shadow-black/50 sm:p-6"
+        className="w-full max-w-5xl rounded-[32px] border border-violet-500/20 bg-[#030712] shadow-2xl shadow-black/50"
       >
-        <div className="sticky top-0 z-10 -mx-4 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-950/95 px-4 pb-4 pt-1 sm:-mx-6 sm:px-6">
+        {/* ── Fixed header inside modal ── */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[32px] border-b border-white/10 bg-[#030712] px-6 py-5">
           <div className="max-w-3xl">
             <p className="text-xs uppercase tracking-[0.3em] text-violet-300">Page help</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">{content.title}</h2>
@@ -3240,25 +3241,28 @@ function PageHelpModal({ page, onClose }: { page: ActivePage; onClose: () => voi
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          {content.sections.map((section) => (
-            <section key={section.title} className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
-              <div className="flex items-center gap-2 text-lg font-semibold text-violet-300">
-                <CircleHelp size={18} />
-                {section.title}
-              </div>
-              <ol className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
-                {section.steps.map((step, index) => (
-                  <li key={step} className="flex gap-3">
-                    <span className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10 text-xs font-semibold text-violet-200">
-                      {index + 1}
-                    </span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ))}
+        {/* ── Scrollable content ── */}
+        <div className="p-6">
+          <div className="grid gap-5 lg:grid-cols-2">
+            {content.sections.map((section) => (
+              <section key={section.title} className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
+                <div className="flex items-center gap-2 text-lg font-semibold text-violet-300">
+                  <CircleHelp size={18} />
+                  {section.title}
+                </div>
+                <ol className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
+                  {section.steps.map((step, index) => (
+                    <li key={step} className="flex gap-3">
+                      <span className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10 text-xs font-semibold text-violet-200">
+                        {index + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ))}
+          </div>
         </div>
       </motion.div>
     </motion.div>
