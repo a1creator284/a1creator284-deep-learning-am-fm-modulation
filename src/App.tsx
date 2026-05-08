@@ -1282,63 +1282,147 @@ function App() {
 
   if (!hasEnteredLab) {
     return (
-      <div className="min-h-screen overflow-hidden bg-[#020617] text-slate-100">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_26%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.14),_transparent_24%)]" />
-        <div className="relative mx-auto flex min-h-screen max-w-[1600px] flex-col items-center justify-center px-4 text-center md:px-8">
+      <div className="relative min-h-screen overflow-hidden bg-[#020617] text-slate-100">
+        {/* Animated grid background */}
+        <div className="pointer-events-none absolute inset-0 bg-grid opacity-60" />
+
+        {/* Radial glows */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-40 left-1/4 h-[600px] w-[600px] rounded-full bg-sky-500/10 blur-[120px]" style={{ animation: "float 6s ease-in-out infinite" }} />
+          <div className="absolute -bottom-40 right-1/4 h-[500px] w-[500px] rounded-full bg-violet-500/10 blur-[120px]" style={{ animation: "float 8s ease-in-out infinite", animationDelay: "2s" }} />
+          <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/8 blur-[100px]" style={{ animation: "float 5s ease-in-out infinite", animationDelay: "1s" }} />
+        </div>
+
+        <div className="relative mx-auto flex min-h-screen max-w-[1400px] flex-col items-center justify-center px-4 text-center md:px-8">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="space-y-8"
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            className="space-y-10"
           >
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-sky-300">
+            {/* Badge */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="inline-flex items-center gap-2 rounded-full border border-sky-500/40 bg-sky-500/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.25em] text-sky-300 shadow-lg shadow-sky-500/10"
+            >
+              <motion.span
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="relative flex h-2 w-2"
+              >
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-400" />
+              </motion.span>
               <BrainCircuit size={14} />
-              Deep Learning Enhanced
-            </div>
-            <div className="space-y-4">
-              <h1 className="text-5xl font-bold tracking-tight text-white md:text-7xl">
+              Deep Learning Enhanced · Live Demo
+            </motion.div>
+
+            {/* Title */}
+            <div className="space-y-3">
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="text-5xl font-bold tracking-tight text-white md:text-7xl lg:text-8xl"
+              >
                 Signal Modulation
-              </h1>
-              <h2 className="bg-gradient-to-r from-sky-400 via-violet-400 to-emerald-400 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-6xl">
+              </motion.h1>
+              <motion.h2
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.35 }}
+                className="animated-gradient-text text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl"
+              >
                 Using Deep Learning
-              </h2>
+              </motion.h2>
             </div>
-            <p className="mx-auto max-w-2xl text-base leading-7 text-slate-400 md:text-lg">
-              Experience the future of signal processing. Our AI-powered system achieves <span className="text-emerald-400 font-semibold">85%+ accuracy</span> in modulation classification, outperforming traditional methods by up to <span className="text-violet-400 font-semibold">20%</span>.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-8">
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-emerald-400">85%+</p>
-                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">AI Accuracy</p>
-              </div>
-              <div className="h-8 w-px bg-slate-700" />
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-sky-400">3x</p>
-                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Faster Processing</p>
-              </div>
-              <div className="h-8 w-px bg-slate-700" />
-              <div className="space-y-1">
-                <p className="text-3xl font-bold text-violet-400">3</p>
-                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Modulation Types</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              <button
+
+            {/* Description */}
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="mx-auto max-w-2xl text-base leading-8 text-slate-400 md:text-lg"
+            >
+              Experience the future of signal processing. Our AI-powered system achieves{" "}
+              <span className="font-semibold text-emerald-400">85%+ accuracy</span> in modulation
+              classification, outperforming traditional methods by up to{" "}
+              <span className="font-semibold text-violet-400">20%</span>.
+            </motion.p>
+
+            {/* Stats */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.65 }}
+              className="flex flex-wrap items-center justify-center gap-6 md:gap-12"
+            >
+              {[
+                { value: "85%+", label: "AI Accuracy", color: "text-emerald-400", glow: "glow-emerald" },
+                { value: "3×",   label: "Faster Processing", color: "text-sky-400",     glow: "glow-sky" },
+                { value: "3",    label: "Modulation Types",  color: "text-violet-400",  glow: "glow-violet" },
+              ].map((stat, i) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.4, delay: 0.7 + i * 0.1 }}
+                  className={`rounded-2xl border border-white/10 bg-slate-900/60 px-6 py-4 backdrop-blur card-hover ${stat.glow}`}
+                >
+                  <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.15em] text-slate-500">{stat.label}</p>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            {/* CTA buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.85 }}
+              className="flex flex-wrap items-center justify-center gap-4"
+            >
+              <motion.button
                 type="button"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setHasEnteredLab(true)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-violet-500 px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:shadow-xl hover:shadow-sky-500/30"
+                className="inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-sky-500 via-violet-500 to-emerald-500 px-9 py-4 text-sm font-bold text-white shadow-xl shadow-sky-500/30 transition"
               >
                 Enter Laboratory
                 <ArrowRight size={18} />
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setHasEnteredLab(true)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/60 px-8 py-4 text-sm font-medium text-slate-300 backdrop-blur transition hover:border-white/20 hover:bg-slate-800/60 hover:text-white"
+                className="inline-flex items-center gap-2.5 rounded-2xl border border-white/15 bg-slate-900/60 px-9 py-4 text-sm font-medium text-slate-300 backdrop-blur transition hover:border-white/30 hover:text-white"
               >
+                <Waves size={16} />
                 Explore Features
-              </button>
-            </div>
+              </motion.button>
+            </motion.div>
+
+            {/* Mini waveform decoration */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1, delay: 1.1 }}
+              className="flex items-end justify-center gap-1 pt-4"
+            >
+              {[3, 6, 10, 14, 18, 22, 18, 14, 10, 6, 3, 6, 10, 14, 18, 22, 18, 14, 10, 6, 3].map((h, i) => (
+                <motion.div
+                  key={i}
+                  className="w-1.5 rounded-full bg-gradient-to-t from-sky-500/40 to-violet-500/40"
+                  style={{ height: `${h}px` }}
+                  animate={{ height: [`${h}px`, `${h * 1.5}px`, `${h}px`] }}
+                  transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.07, ease: "easeInOut" }}
+                />
+              ))}
+            </motion.div>
           </motion.div>
         </div>
       </div>
@@ -1347,7 +1431,14 @@ function App() {
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#020617] text-slate-100">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_26%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.14),_transparent_24%)]" />
+      {/* Animated grid */}
+      <div className="pointer-events-none fixed inset-0 bg-grid opacity-40" />
+      {/* Ambient glows */}
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute -top-60 left-1/3 h-[500px] w-[500px] rounded-full bg-sky-500/8 blur-[140px]" />
+        <div className="absolute -bottom-60 right-1/3 h-[500px] w-[500px] rounded-full bg-violet-500/8 blur-[140px]" />
+      </div>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.12),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.08),_transparent_26%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.10),_transparent_24%)]" />
 
       <div className="relative mx-auto max-w-[1600px] px-4 py-6 md:px-8 md:py-8">
         <header className="flex flex-col gap-5 border-b border-white/10 pb-6 xl:flex-row xl:items-end xl:justify-between">
@@ -1366,7 +1457,8 @@ function App() {
               transition={{ duration: 0.5, delay: 0.05 }}
               className="text-3xl font-semibold tracking-tight text-white md:text-5xl"
             >
-              Signal Modulation Lab
+              Signal Modulation{" "}
+              <span className="animated-gradient-text">Lab</span>
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 14 }}
@@ -1379,7 +1471,13 @@ function App() {
           </div>
 
           <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[620px] xl:items-end">
-            <div className="grid w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1 md:grid-cols-3 xl:grid-cols-5">
+            {/* Nav tabs */}
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="grid w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1 md:grid-cols-3 xl:grid-cols-5"
+            >
               {[
                 { id: "simulator" as const, label: "Simulator" },
                 { id: "flow" as const, label: "Flow & Report" },
@@ -1387,97 +1485,67 @@ function App() {
                 { id: "analysis" as const, label: "AI Analysis" },
                 { id: "backend" as const, label: "Backend & Tests" },
               ].map((page) => (
-                <button
+                <motion.button
                   key={page.id}
                   type="button"
                   data-testid={`nav-${page.id}`}
                   onClick={() => setActivePage(page.id)}
+                  whileTap={{ scale: 0.96 }}
                   className={cn(
                     "rounded-xl px-3 py-2 text-sm font-medium leading-5 transition",
-                    activePage === page.id ? "bg-white text-slate-950 shadow-lg shadow-white/10" : "text-slate-400 hover:text-slate-200",
+                    activePage === page.id
+                      ? "bg-white text-slate-950 shadow-lg shadow-white/10"
+                      : "text-slate-400 hover:text-slate-200",
                   )}
                 >
                   {page.label}
-                </button>
+                </motion.button>
               ))}
-            </div>
+            </motion.div>
 
-            <div className="flex flex-wrap gap-3 xl:justify-end">
-              <button
-                type="button"
-                data-testid="header-page-help"
-                onClick={() => setHelpPage(activePage)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-100 transition hover:border-violet-400/50 hover:bg-violet-500/15"
-              >
-                <CircleHelp size={16} />
-                Page Help
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25 }}
+              className="flex flex-wrap gap-3 xl:justify-end"
+            >
+              <button type="button" data-testid="header-page-help" onClick={() => setHelpPage(activePage)} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-100 transition hover:border-violet-400/50 hover:bg-violet-500/20 hover:shadow-lg hover:shadow-violet-500/10">
+                <CircleHelp size={16} />Page Help
               </button>
-              <button
-                type="button"
-                data-testid="header-theme-toggle"
-                onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-amber-500/40 hover:bg-slate-900"
-              >
+              <button type="button" data-testid="header-theme-toggle" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-amber-500/40 hover:bg-slate-900">
                 {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
                 {theme === "dark" ? "Light" : "Dark"}
               </button>
-              <button
-                type="button"
-                data-testid="header-theory"
-                onClick={() => setTheoryOpen(true)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-sky-500/40 hover:bg-slate-900"
-              >
-                <BookOpen size={16} />
-                Theory about AM/FM
+              <button type="button" data-testid="header-theory" onClick={() => setTheoryOpen(true)} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-sky-500/40 hover:bg-slate-900">
+                <BookOpen size={16} />Theory about AM/FM
               </button>
-              <button
-                type="button"
-                onClick={downloadCurrentCsv}
-                className="inline-flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/15"
-              >
-                <Download size={16} />
-                Export CSV
+              <button type="button" onClick={downloadCurrentCsv} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/20">
+                <Download size={16} />Export CSV
               </button>
-              <button
-                type="button"
-                data-testid="header-train-model"
-                onClick={trainModel}
-                disabled={isTraining}
-                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
-              >
+              <button type="button" data-testid="header-train-model" onClick={trainModel} disabled={isTraining} className="btn-press inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70 hover:shadow-lg hover:shadow-emerald-500/25">
                 <BrainCircuit size={16} />
                 {isTraining ? "Training..." : "Train Model"}
               </button>
-              <button
-                type="button"
-                data-testid="header-predict-current"
-                onClick={() => void predictCurrentWaveform()}
-                className="inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-300 transition hover:border-sky-400/50 hover:bg-sky-500/15"
-              >
-                <PlayCircle size={16} />
-                Predict Current Waveform
+              <button type="button" data-testid="header-predict-current" onClick={() => void predictCurrentWaveform()} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-300 transition hover:border-sky-400/50 hover:bg-sky-500/20">
+                <PlayCircle size={16} />Predict Current Waveform
               </button>
-              <button
-                type="button"
-                onClick={() => void runFullCommunicationFlow()}
-                className="inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-200 transition hover:border-violet-400/50 hover:bg-violet-500/15"
-              >
+              <button type="button" onClick={() => void runFullCommunicationFlow()} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-200 transition hover:border-violet-400/50 hover:bg-violet-500/20">
                 <Waves size={16} />
                 {isFlowRunning ? "Running Flow..." : "Run Full Flow"}
               </button>
-              <button
-                type="button"
-                onClick={downloadProjectReport}
-                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
-              >
-                <FileText size={16} />
-                Download Report
+              <button type="button" onClick={downloadProjectReport} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/20">
+                <FileText size={16} />Download Report
               </button>
-            </div>
+            </motion.div>
           </div>
         </header>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        >
           <MetricBlock label="Current mode" value={mode} icon={<Radio size={16} />} tone="sky" />
           <MetricBlock label="Signal source" value={signalSource === "text" ? "Text message" : "Sine waveform"} icon={<BookOpen size={16} />} tone="violet" />
           <MetricBlock label="Sample rate" value={`${params.sampleRate.toFixed(0)} Hz`} icon={<Cpu size={16} />} tone="emerald" />
@@ -1487,7 +1555,7 @@ function App() {
             icon={<Gauge size={16} />}
             tone="amber"
           />
-        </div>
+        </motion.div>
 
         <main className="mt-6">
           {activePage === "simulator" ? (
@@ -1764,9 +1832,19 @@ function App() {
                   <div className="mt-5 flex flex-col gap-6">
 
                     {/* Message Signal */}
-                    <div className="rounded-2xl border border-sky-500/30 bg-slate-950/80 p-5">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.5 }}
+                      className="graph-card rounded-2xl border border-sky-500/30 bg-slate-950/80 p-5"
+                    >
+                      <div className="graph-scan-line" />
                       <div className="mb-3 flex items-center gap-2">
-                        <span className="h-3 w-3 rounded-full bg-sky-400" />
+                        <motion.span
+                          animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="h-3 w-3 rounded-full bg-sky-400 shadow-lg shadow-sky-400/50"
+                        />
                         <p className="text-sm font-semibold uppercase tracking-[0.15em] text-sky-400">Message Signal — m(t)</p>
                       </div>
                       <div className="h-[340px] w-full">
@@ -1793,16 +1871,26 @@ function App() {
                               itemStyle={{ fontSize: 13 }}
                               labelFormatter={(value) => formatTimeLabel(Number(value))}
                             />
-                            <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2.5} dot={false} name="Message m(t)" />
+                            <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2.5} dot={false} name="Message m(t)" isAnimationActive={true} animationDuration={800} animationEasing="ease-out" />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
-                    </div>
+                    </motion.div>
 
                     {/* Carrier Signal */}
-                    <div className="rounded-2xl border border-emerald-500/30 bg-slate-950/80 p-5">
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.5, delay: 0.1 }}
+                      className="graph-card-emerald rounded-2xl border border-emerald-500/30 bg-slate-950/80 p-5"
+                    >
+                      <div className="graph-scan-line" style={{ animationDelay: "1.3s" }} />
                       <div className="mb-3 flex items-center gap-2">
-                        <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                        <motion.span
+                          animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+                          transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
+                          className="h-3 w-3 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/50"
+                        />
                         <p className="text-sm font-semibold uppercase tracking-[0.15em] text-emerald-400">Carrier Signal — c(t)</p>
                       </div>
                       <div className="h-[340px] w-full">
@@ -1829,16 +1917,26 @@ function App() {
                               itemStyle={{ fontSize: 13 }}
                               labelFormatter={(value) => formatTimeLabel(Number(value))}
                             />
-                            <Line type="monotone" dataKey="carrier" stroke="#34d399" strokeWidth={2} strokeDasharray="8 4" dot={false} name="Carrier c(t)" />
+                            <Line type="monotone" dataKey="carrier" stroke="#34d399" strokeWidth={2} strokeDasharray="8 4" dot={false} name="Carrier c(t)" isAnimationActive={true} animationDuration={800} animationEasing="ease-out" animationBegin={150} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
-                    </div>
+                    </motion.div>
 
                     {/* Modulated Signal */}
-                    <div className="rounded-2xl border border-violet-500/30 bg-slate-950/80 p-5">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.5, delay: 0.2 }}
+                      className="graph-card-violet rounded-2xl border border-violet-500/30 bg-slate-950/80 p-5"
+                    >
+                      <div className="graph-scan-line" style={{ animationDelay: "2.6s" }} />
                       <div className="mb-3 flex items-center gap-2">
-                        <span className="h-3 w-3 rounded-full bg-violet-400" />
+                        <motion.span
+                          animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+                          transition={{ duration: 2, repeat: Infinity, delay: 1 }}
+                          className="h-3 w-3 rounded-full bg-violet-400 shadow-lg shadow-violet-400/50"
+                        />
                         <p className="text-sm font-semibold uppercase tracking-[0.15em] text-violet-400">{mode} Modulated Signal — s(t)</p>
                       </div>
                       <div className="h-[340px] w-full">
@@ -1865,19 +1963,25 @@ function App() {
                               itemStyle={{ fontSize: 13 }}
                               labelFormatter={(value) => formatTimeLabel(Number(value))}
                             />
-                            <Line type="monotone" dataKey="modulated" stroke="#a78bfa" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} />
+                            <Line type="monotone" dataKey="modulated" stroke="#a78bfa" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} isAnimationActive={true} animationDuration={800} animationEasing="ease-out" animationBegin={300} />
                             {snapshot ? (
                               <Line type="monotone" dataKey="savedModulated" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 4" dot={false} name={`Saved ${snapshot.mode} snapshot`} />
                             ) : null}
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
-                    </div>
+                    </motion.div>
 
                   </div>
 
                   {/* ── Combined Signal View ── */}
-                  <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/80 p-5">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="mt-6 rounded-2xl border border-white/10 bg-slate-950/80 p-5"
+                    style={{ boxShadow: "0 0 40px 4px rgba(56,189,248,0.06), 0 0 40px 4px rgba(167,139,250,0.06)" }}
+                  >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold text-white">Combined Signal View</p>
@@ -1909,18 +2013,18 @@ function App() {
                             labelFormatter={(value) => formatTimeLabel(Number(value))}
                           />
                           <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 12, paddingBottom: 6 }} formatter={(value) => <span style={{ color: "#94a3b8" }}>{value}</span>} />
-                          <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Message m(t)" />
-                          <Line type="monotone" dataKey="carrier" stroke="#34d399" strokeWidth={1.5} strokeDasharray="8 4" dot={false} name="Carrier c(t)" />
-                          <Line type="monotone" dataKey="modulated" stroke="#a78bfa" strokeWidth={2.5} dot={false} name={`${mode} s(t)`} />
+                          <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Message m(t)" isAnimationActive={true} animationDuration={900} animationEasing="ease-out" />
+                          <Line type="monotone" dataKey="carrier" stroke="#34d399" strokeWidth={1.5} strokeDasharray="8 4" dot={false} name="Carrier c(t)" isAnimationActive={true} animationDuration={900} animationEasing="ease-out" animationBegin={100} />
+                          <Line type="monotone" dataKey="modulated" stroke="#a78bfa" strokeWidth={2.5} dot={false} name={`${mode} s(t)`} isAnimationActive={true} animationDuration={900} animationEasing="ease-out" animationBegin={200} />
                           {snapshot ? (
                             <Line type="monotone" dataKey="savedModulated" stroke="#f59e0b" strokeWidth={1.8} strokeDasharray="6 4" dot={false} name={`Snapshot (${snapshot.mode})`} />
                           ) : null}
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                  </div>
+                  </motion.div>
 
-                  {/* ── Side-by-side comparison ── */}
+                                    {/* ── Side-by-side comparison ── */}
                   {comparisonMode && comparisonSnapshot && (
                     <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
                       <p className="text-xs uppercase tracking-[0.25em] text-sky-200 mb-3">Side-by-Side Comparison</p>
