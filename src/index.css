@@ -329,3 +329,42 @@ html.light .feature-btn.border-violet-500\/20    { border-color: #c4b5fd !import
 html.light .feature-btn.border-violet-500\/20:hover { border-color: #a78bfa !important; background-color: #ddd6fe !important; }
 html.light .feature-btn.border-amber-500\/20     { border-color: #fcd34d !important; color: #b45309 !important; background-color: #fef3c7 !important; }
 html.light .feature-btn.border-amber-500\/20:hover { border-color: #fbbf24 !important; background-color: #fde68a !important; }
+
+/* ── ParamControl light mode fixes ───────────────────────────────── */
+
+/* Number input box */
+html.light input[type="number"] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light input[type="number"]:focus {
+  border-color: #38bdf8 !important;
+  outline: none;
+}
+
+/* Range slider track */
+html.light input[type="range"].bg-slate-800 {
+  background-color: #cbd5e1 !important;
+}
+
+/* Also catch the range track via the appearance-none class */
+html.light input[type="range"].appearance-none {
+  background-color: #cbd5e1 !important;
+}
+
+/* Value label (e.g. "1.2 V") next to the param name */
+html.light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+/* ParamControl card outer border */
+html.light .border-white\/10 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Hint text */
+html.light .text-slate-500 {
+  color: #64748b !important;
+}

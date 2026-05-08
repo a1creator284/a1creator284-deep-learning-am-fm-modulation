@@ -8,6 +8,7 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
+| 2026-05-09 | Fixed light mode ParamControl visibility — number input, range slider track, and value label now use proper light backgrounds and dark text |
 | 2026-05-09 | Major UI overhaul — animated landing page with waveform bars, gradient text, glowing stat cards; animated grid background; graph cards with scan-line sweep, pulsing dot indicators, staggered slide-in animations; recharts line draw-on animation; header "Lab" gradient text; metric cards fade-in; button press scale effect; new CSS animations: float, shimmer, border-glow, scan-line, gradient-shift |
 | 2026-05-09 | Fixed help modal overlap on scroll — removed sticky header inside scrollable container; outer overlay now scrolls, modal card is fully opaque with no bleed-through |
 | 2026-05-09 | Simulator graphs — switched from cramped 3-column grid to full-width stacked layout; each graph now 340 px tall with axis labels, colored borders, larger tick text; combined overlay graph 380 px |
