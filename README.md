@@ -8,7 +8,8 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
-| 2026-05-09 | Added Auto Demo button — 8-step scripted demo: AM preset → snapshot → noise ramp → FM → PM → AM clean → train AI → predict; live overlay with animated progress bar, step dots, pulsing indicator; Stop button aborts at any point |
+| 2026-05-09 | Maximised classifier accuracy — signal length 128→256, samples 120→300/class, epochs 5→15, hidden 24→64 neurons, 1→2 hidden layers, Leaky ReLU, He init, LR decay; added 8 engineered features (envelope variance, ZCR, crest factor, IF variance); live modulated text signal chart in Audio Lab; "Why 100% is impossible" explanation panel on AI Analysis page |
+| 2026-05-09 | Added Auto Demo button — 8-step scripted demo with live overlay and progress bar |
 | 2026-05-09 | Added 5 new features: (1) "How It Works" 4-step flow on landing page; (2) Live SNR gauge with 20-segment color bar (green=ideal, red=severe); (3) Mode-change callout banner explaining what changed when switching AM/FM/PM; (4) Keyboard shortcuts A/F/P/T/Space; (5) Floating ? button + shortcut hint overlay panel |
 | 2026-05-09 | Added comprehensive "Proof of Accuracy" section on AI Analysis page |
 | 2026-05-09 | Premium UI polish — FeatureButton gets motion hover/tap + shadow glow; MetricBlock gets icon box, corner accent, shimmer, hover lift; ParamControl gets colored dot, value badge, live progress bar fill, hover border; AM/FM/PM mode switcher redesigned as tall cards with layoutId animation and per-mode glow; waveform panel header gets icon box + subtitle |
