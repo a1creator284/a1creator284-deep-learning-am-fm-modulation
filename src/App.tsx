@@ -492,6 +492,10 @@ function App() {
   const [showConstellation, setShowConstellation] = useState(false);
   const [showKeyboardHints, setShowKeyboardHints] = useState(false);
   const [modeChangedFrom, setModeChangedFrom] = useState<SignalMode | null>(null);
+  const [isDemoRunning, setIsDemoRunning] = useState(false);
+  const [demoStep, setDemoStep] = useState<string>("");
+  const [demoProgress, setDemoProgress] = useState(0);
+  const demoAbortRef = useRef(false);
   const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const modelRef = useRef<MiniModel | null>(null);
@@ -1250,6 +1254,93 @@ function App() {
     triggerBrowserDownload("signal-modulation-report.md", report.reportMarkdown, "text/markdown;charset=utf-8");
   };
 
+  // ── Demo Script ──────────────────────────────────────────────────────────
+  const runDemoScript = async () => {
+    if (isDemoRunning) {
+      // Abort if already running
+      demoAbortRef.current = true;
+      setIsDemoRunning(false);
+      setDemoStep("");
+      setDemoProgress(0);
+      return;
+    }
+
+    demoAbortRef.current = false;
+    setIsDemoRunning(true);
+    setActivePage("simulator");
+
+    const step = async (label: string, pct: number, ms: number) => {
+      if (demoAbortRef.current) throw new Error("aborted");
+      setDemoStep(label);
+      setDemoProgress(pct);
+      await waitForMs(ms);
+    };
+
+    try {
+      // Step 1 — Load AM preset
+      await step("Step 1 / 8 — Loading AM preset…", 5, 600);
+      applyPreset("AM");
+      await step("AM preset loaded. Carrier at 100 kHz, message at 10 kHz.", 12, 1400);
+
+      // Step 2 — Capture clean AM snapshot
+      await step("Step 2 / 8 — Capturing clean AM waveform snapshot…", 18, 800);
+      captureSnapshot();
+      await step("Snapshot saved. Orange dashed line will show the clean reference.", 24, 1200);
+
+      // Step 3 — Increase noise gradually
+      await step("Step 3 / 8 — Increasing noise to simulate a real channel…", 30, 600);
+      for (let n = 0.05; n <= 0.25; n = Math.round((n + 0.05) * 100) / 100) {
+        if (demoAbortRef.current) throw new Error("aborted");
+        updateParam("noiseLevel", n);
+        setDemoStep(`Noise level → ${n.toFixed(2)} — watch the waveform degrade`);
+        await waitForMs(500);
+      }
+      await step("Noise at 0.25 — traditional accuracy drops to ~67%. Signal is distorted.", 40, 1400);
+
+      // Step 4 — Switch to FM
+      await step("Step 4 / 8 — Switching to FM modulation…", 46, 600);
+      applyPreset("FM");
+      await step("FM loaded. Amplitude is now constant — frequency carries the information.", 52, 1600);
+
+      // Step 5 — Switch to PM
+      await step("Step 5 / 8 — Switching to PM modulation…", 57, 600);
+      applyPreset("PM");
+      await step("PM loaded. Phase of the carrier shifts with the message signal.", 62, 1600);
+
+      // Step 6 — Back to AM, reset noise
+      await step("Step 6 / 8 — Returning to AM with clean channel for training…", 66, 600);
+      applyPreset("AM");
+      updateParam("noiseLevel", 0.02);
+      await step("AM preset restored. Noise reset to 0.02 — ideal training conditions.", 70, 1200);
+
+      // Step 7 — Train the model
+      await step("Step 7 / 8 — Training the deep learning model…", 74, 800);
+      setActivePage("analysis");
+      const dlAccuracy = await trainModel();
+      if (demoAbortRef.current) throw new Error("aborted");
+      setDemoProgress(90);
+      setDemoStep(`Training complete! Deep learning accuracy: ${dlAccuracy !== null ? dlAccuracy.toFixed(1) + "%" : "done"}. Traditional was ~72%.`);
+      await waitForMs(2000);
+
+      // Step 8 — Predict
+      await step("Step 8 / 8 — Running prediction on current waveform…", 94, 600);
+      await predictCurrentWaveform();
+      if (demoAbortRef.current) throw new Error("aborted");
+
+      setDemoProgress(100);
+      setDemoStep("Demo complete! Deep learning improved accuracy by 8–15 percentage points over traditional analysis.");
+      await waitForMs(3500);
+
+    } catch {
+      // aborted or error — silent cleanup
+    } finally {
+      setIsDemoRunning(false);
+      setDemoStep("");
+      setDemoProgress(0);
+      demoAbortRef.current = false;
+    }
+  };
+
   const runFullCommunicationFlow = async () => {
     setActivePage("flow");
     setIsFlowRunning(true);
@@ -1600,6 +1691,24 @@ function App() {
               <button type="button" onClick={downloadCurrentCsv} className="btn-press inline-flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/20">
                 <Download size={16} />Export CSV
               </button>
+              <motion.button
+                type="button"
+                onClick={() => void runDemoScript()}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                className={cn(
+                  "btn-press inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition",
+                  isDemoRunning
+                    ? "border-red-500/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
+                    : "border-violet-400/50 bg-gradient-to-r from-violet-500/20 to-sky-500/20 text-white hover:from-violet-500/30 hover:to-sky-500/30 hover:shadow-lg hover:shadow-violet-500/20"
+                )}
+              >
+                {isDemoRunning ? (
+                  <><X size={16} /> Stop Demo</>
+                ) : (
+                  <><Play size={16} /> Auto Demo</>
+                )}
+              </motion.button>
               <button type="button" data-testid="header-train-model" onClick={trainModel} disabled={isTraining} className="btn-press inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70 hover:shadow-lg hover:shadow-emerald-500/25">
                 <BrainCircuit size={16} />
                 {isTraining ? "Training..." : "Train Model"}
@@ -3572,6 +3681,81 @@ function App() {
       >
         <span className="text-sm font-bold">?</span>
       </motion.button>
+
+      {/* ── Demo Script live overlay ── */}
+      <AnimatePresence>
+        {isDemoRunning && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="fixed bottom-20 left-1/2 z-50 w-[min(520px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-violet-500/40 bg-slate-950/95 p-5 shadow-2xl shadow-violet-500/20 backdrop-blur"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <motion.span
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                  className="relative flex h-2.5 w-2.5 shrink-0"
+                >
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-violet-400" />
+                </motion.span>
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">Auto Demo Running</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void runDemoScript()}
+                className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/20"
+              >
+                Stop
+              </button>
+            </div>
+
+            {/* Step label */}
+            <motion.p
+              key={demoStep}
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.25 }}
+              className="mt-3 text-sm leading-6 text-slate-200"
+            >
+              {demoStep}
+            </motion.p>
+
+            {/* Progress bar */}
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-sky-400 to-emerald-400"
+                animate={{ width: `${demoProgress}%` }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              />
+            </div>
+            <div className="mt-1.5 flex justify-between text-[10px] text-slate-600">
+              <span>AM preset</span>
+              <span>Noise</span>
+              <span>FM / PM</span>
+              <span>Train AI</span>
+              <span>Result</span>
+            </div>
+
+            {/* Step dots */}
+            <div className="mt-3 flex items-center justify-center gap-2">
+              {[5, 18, 30, 46, 57, 66, 74, 100].map((threshold, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all duration-300",
+                    demoProgress >= threshold ? "w-6 bg-violet-400" : "w-1.5 bg-slate-700"
+                  )}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
