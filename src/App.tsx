@@ -1521,9 +1521,10 @@ function App() {
                   ))}
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <FeatureButton label="Load AM preset" icon={<Waves size={15} />} tone="sky" onClick={() => applyPreset("AM")} />
                   <FeatureButton label="Load FM preset" icon={<Radio size={15} />} tone="emerald" onClick={() => applyPreset("FM")} />
+                  <FeatureButton label="Load PM preset" icon={<Activity size={15} />} tone="violet" onClick={() => applyPreset("PM")} />
                   <FeatureButton label="Randomize values" icon={<Shuffle size={15} />} tone="violet" onClick={randomizeCurrentSignal} />
                   <FeatureButton label="Reset current mode" icon={<RefreshCcw size={15} />} tone="amber" onClick={resetCurrentMode} />
                 </div>
