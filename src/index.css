@@ -42,3 +42,229 @@ input {
   border-radius: 9999px;
   background: linear-gradient(180deg, rgba(56, 189, 248, 0.55), rgba(16, 185, 129, 0.55));
 }
+
+/* ── Light Theme ──────────────────────────────────────────────────── */
+
+html.light body {
+  background: #f8fafc;
+  color: #1e293b;
+  color-scheme: light;
+}
+
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.5), rgba(16, 185, 129, 0.5));
+}
+
+html.light ::selection {
+  background: rgba(59, 130, 246, 0.25);
+  color: #0f172a;
+}
+
+/* Light theme overrides for main dark backgrounds */
+html.light .bg-\[\#020617\] {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-slate-900\/75,
+html.light .bg-slate-900\/70,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/90 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
+html.light .bg-slate-950\/70,
+html.light .bg-slate-950\/80,
+html.light .bg-slate-950\/75,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/95,
+html.light .bg-slate-950 {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+}
+
+html.light .text-slate-100,
+html.light .text-white {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-200 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-300 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-400 {
+  color: #64748b !important;
+}
+
+html.light .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+html.light .border-white\/10 {
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+html.light .shadow-black\/30,
+html.light .shadow-black\/20,
+html.light .shadow-black\/50 {
+  --tw-shadow-color: rgba(148, 163, 184, 0.15) !important;
+}
+
+/* Light theme gradient overlay */
+html.light .pointer-events-none.absolute.inset-0 {
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.06), transparent 28%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.05), transparent 26%),
+    radial-gradient(circle at bottom, rgba(168, 85, 247, 0.05), transparent 24%) !important;
+}
+
+/* ── Print Styles ─────────────────────────────────────────────────── */
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #1e293b !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide non-essential UI for print */
+  .no-print,
+  [data-no-print],
+  nav,
+  header .flex.flex-wrap.gap-3,
+  header .grid.grid-cols-2 {
+    display: none !important;
+  }
+
+  /* Reset dark backgrounds for print */
+  .bg-\[\#020617\],
+  .bg-slate-900\/75,
+  .bg-slate-950\/70,
+  .bg-slate-950\/80 {
+    background: #fff !important;
+  }
+
+  .text-slate-100,
+  .text-slate-200,
+  .text-slate-300,
+  .text-white {
+    color: #1e293b !important;
+  }
+
+  .border-white\/10 {
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Clean up rounded cards for print */
+  .rounded-3xl,
+  .rounded-2xl {
+    border-radius: 8px !important;
+  }
+
+  /* Ensure report content fills page */
+  .max-w-\[1600px\] {
+    max-width: 100% !important;
+    padding: 0 16px !important;
+  }
+
+  /* Hide backdrop blur effects */
+  .backdrop-blur {
+    backdrop-filter: none !important;
+  }
+}
+
+/* ── Animated Signal Flow ─────────────────────────────────────────── */
+
+@keyframes signal-flow-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 4px rgba(56, 189, 248, 0.2);
+  }
+}
+
+@keyframes signal-flow-dash {
+  0% {
+    stroke-dashoffset: 20;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes signal-flow-travel {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+.signal-flow-block {
+  animation: signal-flow-pulse 2.5s ease-in-out infinite;
+}
+
+.signal-flow-block:nth-child(2) {
+  animation-delay: 0.3s;
+}
+.signal-flow-block:nth-child(3) {
+  animation-delay: 0.6s;
+}
+.signal-flow-block:nth-child(4) {
+  animation-delay: 0.9s;
+}
+.signal-flow-block:nth-child(5) {
+  animation-delay: 1.2s;
+}
+
+.signal-flow-connector {
+  position: relative;
+  overflow: hidden;
+}
+
+.signal-flow-connector::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #38bdf8, #34d399);
+  animation: signal-flow-travel 2s linear infinite;
+}
+
+/* ── Recording Timeline ───────────────────────────────────────────── */
+
+@keyframes timeline-dot-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 8px 3px rgba(56, 189, 248, 0.2);
+  }
+}
+
+.timeline-dot-active {
+  animation: timeline-dot-pulse 1.5s ease-in-out infinite;
+}

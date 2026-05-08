@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
@@ -6,6 +6,8 @@ import {
   BookOpen,
   Bookmark,
   BrainCircuit,
+  Circle,
+  Copy,
   Cpu,
   Download,
   Eye,
@@ -13,12 +15,17 @@ import {
   FileText,
   Gauge,
   CircleHelp,
+  Moon,
+  Pause,
+  Play,
   PlayCircle,
+  Printer,
   Radio,
   RefreshCcw,
   Server,
   Shuffle,
   SlidersHorizontal,
+  Sun,
   Waves,
   X,
 } from "lucide-react";
@@ -27,9 +34,12 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
+  ZAxis,
 } from "recharts";
 import { cn } from "./utils/cn";
 import {
@@ -55,6 +65,9 @@ import {
 import { buildTextSignal } from "./utils/textSignal";
 import {
   buildWavBlob,
+  computeBER,
+  computeConstellationPoints,
+  computeEyeDiagram,
   computeSignalQualityMetrics,
   computeSignalSpectrum,
   recoverMessageSignal,
@@ -71,6 +84,7 @@ import {
   createRandomSignalParameters,
   generateSignal,
   sampleSignalPoints,
+  type NoiseType,
   type SignalMode,
   type SignalParameters,
   type SignalPoint,
@@ -89,6 +103,15 @@ const clampValue = (value: number, min: number, max: number) => Math.min(max, Ma
 type SignalSource = "analog" | "text";
 type ActivePage = "simulator" | "flow" | "audio" | "analysis" | "backend";
 type Accent = "sky" | "emerald" | "violet" | "amber";
+type ThemeMode = "dark" | "light";
+
+type RecordedState = {
+  params: SignalParameters;
+  mode: SignalMode;
+  noiseType: NoiseType;
+  timestamp: string;
+};
+
 
 type PredictionState = {
   label: string;
@@ -142,6 +165,7 @@ const PRESET_BY_MODE: Record<SignalMode, SignalParameters> = {
     duration: 0.0012,
     sampleRate: 1_000_000,
     noiseLevel: 0.02,
+    noiseType: "AWGN",
   },
   FM: {
     ...DEFAULT_SIGNAL_PARAMETERS,
@@ -153,6 +177,43 @@ const PRESET_BY_MODE: Record<SignalMode, SignalParameters> = {
     duration: 0.0012,
     sampleRate: 1_000_000,
     noiseLevel: 0.02,
+    noiseType: "AWGN",
+  },
+  BPSK: {
+    ...DEFAULT_SIGNAL_PARAMETERS,
+    messageAmplitude: 1,
+    messageFrequency: 5_000,
+    carrierAmplitude: 2,
+    carrierFrequency: 50_000,
+    frequencyDeviation: 5_000,
+    duration: 0.002,
+    sampleRate: 500_000,
+    noiseLevel: 0.05,
+    noiseType: "AWGN",
+  },
+  QPSK: {
+    ...DEFAULT_SIGNAL_PARAMETERS,
+    messageAmplitude: 1,
+    messageFrequency: 5_000,
+    carrierAmplitude: 2,
+    carrierFrequency: 50_000,
+    frequencyDeviation: 5_000,
+    duration: 0.002,
+    sampleRate: 500_000,
+    noiseLevel: 0.05,
+    noiseType: "AWGN",
+  },
+  QAM: {
+    ...DEFAULT_SIGNAL_PARAMETERS,
+    messageAmplitude: 1,
+    messageFrequency: 5_000,
+    carrierAmplitude: 2,
+    carrierFrequency: 50_000,
+    frequencyDeviation: 5_000,
+    duration: 0.002,
+    sampleRate: 500_000,
+    noiseLevel: 0.05,
+    noiseType: "AWGN",
   },
 };
 
@@ -438,6 +499,20 @@ function App() {
   const [sessionStatus, setSessionStatus] = useState("No saved session yet.");
   const [selfCheckReport, setSelfCheckReport] = useState<SelfCheckReport>(null);
 
+  // ── New feature states ──
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    try { return (window.localStorage.getItem("signal-lab-theme") as ThemeMode) || "dark"; } catch { return "dark"; }
+  });
+  const [noiseType, setNoiseType] = useState<NoiseType>("AWGN");
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [comparisonSnapshot, setComparisonSnapshot] = useState<SignalPoint[] | null>(null);
+  const [recordedStates, setRecordedStates] = useState<RecordedState[]>([]);
+  const [isPlayingTimeline, setIsPlayingTimeline] = useState(false);
+  const [activeTimelineIndex, setActiveTimelineIndex] = useState<number | null>(null);
+  const [showEyeDiagram, setShowEyeDiagram] = useState(false);
+  const [showConstellation, setShowConstellation] = useState(false);
+  const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const modelRef = useRef<MiniModel | null>(null);
   const audioContextRef = useRef<BrowserAudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -499,8 +574,20 @@ function App() {
         }
       }
       audioContextRef.current?.close().catch(() => undefined);
+      if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
     };
   }, []);
+
+  // ── Theme effect ──
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", theme === "light");
+    try { window.localStorage.setItem("signal-lab-theme", theme); } catch { /* ignore */ }
+  }, [theme]);
+
+  // ── Sync noiseType into params ──
+  useEffect(() => {
+    setParams((prev) => (prev.noiseType !== noiseType ? { ...prev, noiseType } : prev));
+  }, [noiseType]);
 
   const analogSignalData = useMemo(() => generateSignal(mode, params), [mode, params]);
   const textSignalPayload = useMemo(
@@ -534,16 +621,38 @@ function App() {
   const spectrumData = useMemo(() => computeSignalSpectrum(activeSignalData, params.sampleRate), [activeSignalData, params.sampleRate]);
   const qualityMetrics = useMemo(() => computeSignalQualityMetrics(activeSignalData), [activeSignalData]);
 
+  // ── New analysis computations ──
+  const eyeDiagramData = useMemo(() => computeEyeDiagram(activeSignalData, params, mode), [activeSignalData, params, mode]);
+  const constellationData = useMemo(() => computeConstellationPoints(activeSignalData, params, mode), [activeSignalData, params, mode]);
+  const berResult = useMemo(() => computeBER(activeSignalData, params, mode, params.noiseLevel), [activeSignalData, params, mode]);
+  const isDigitalMode = mode === "BPSK" || mode === "QPSK" || mode === "QAM";
+
   const modulationIndex = params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001);
-  const bandwidth = mode === "AM" ? 2 * params.messageFrequency : 2 * (params.frequencyDeviation + params.messageFrequency);
+  const bandwidth = mode === "AM" ? 2 * params.messageFrequency
+    : mode === "FM" ? 2 * (params.frequencyDeviation + params.messageFrequency)
+    : mode === "BPSK" ? 2 * (params.messageFrequency > 0 ? params.messageFrequency : 5_000)
+    : 2 * (params.messageFrequency > 0 ? params.messageFrequency : 5_000); // QPSK/QAM similar
   const isOverModulated = modulationIndex > 1;
-  const formula = mode === "AM" ? "s(t) = Ac [1 + mu cos(2 pi fm t)] cos(2 pi fc t)" : "s(t) = Ac cos(2 pi fc t + beta sin(2 pi fm t))";
-  const formulaDescription =
-    signalSource === "text"
-      ? `Text mode is active. Each character is converted into binary bits, and those bits are used as the message signal for ${mode} modulation.`
-      : mode === "AM"
-        ? "AM changes the amplitude of the carrier while the carrier frequency stays fixed."
-        : "FM changes the instantaneous frequency of the carrier while the amplitude remains almost constant.";
+
+  const FORMULA_MAP: Record<SignalMode, string> = {
+    AM: "s(t) = Ac [1 + μ cos(2π fm t)] cos(2π fc t)",
+    FM: "s(t) = Ac cos(2π fc t + β sin(2π fm t))",
+    BPSK: "s(t) = Ac · d(t) · cos(2π fc t)  where d(t) ∈ {+1, −1}",
+    QPSK: "s(t) = I·cos(2π fc t) − Q·sin(2π fc t)  where (I,Q) ∈ {±1}",
+    QAM: "s(t) = I·cos(2π fc t) − Q·sin(2π fc t)  4-QAM constellation",
+  };
+  const formula = FORMULA_MAP[mode];
+
+  const DESCRIPTION_MAP: Record<SignalMode, string> = {
+    AM: "AM changes the amplitude of the carrier while the carrier frequency stays fixed.",
+    FM: "FM changes the instantaneous frequency of the carrier while the amplitude remains almost constant.",
+    BPSK: "BPSK maps binary data to two carrier phase states (0° and 180°), providing robust digital transmission.",
+    QPSK: "QPSK maps symbol pairs to four phase states, doubling spectral efficiency compared to BPSK.",
+    QAM: "4-QAM maps 2-bit symbols onto a grid of amplitude and phase states for efficient data transmission.",
+  };
+  const formulaDescription = signalSource === "text"
+    ? `Text mode is active. Each character is converted into binary bits, and those bits are used as the message signal for ${mode} modulation.`
+    : DESCRIPTION_MAP[mode];
 
   const peakModulated = Math.max(...activeSignalData.map((point) => Math.abs(point.modulated)), 0);
   const estimatedSnr =
@@ -628,6 +737,89 @@ function App() {
   };
 
   const clearSnapshot = () => setSnapshot(null);
+
+  // ── Recording timeline functions ──
+  const recordCurrentState = useCallback(() => {
+    if (recordedStates.length >= 10) {
+      setTrainingStatus("Recording limit reached (10 states). Clear timeline to add more.");
+      return;
+    }
+    setRecordedStates((prev) => [
+      ...prev,
+      { params: { ...params }, mode, noiseType, timestamp: new Date().toLocaleTimeString() },
+    ]);
+    setTrainingStatus(`State #${recordedStates.length + 1} recorded at ${new Date().toLocaleTimeString()}.`);
+  }, [recordedStates.length, params, mode, noiseType]);
+
+  const clearTimeline = useCallback(() => {
+    if (playbackTimerRef.current) { clearInterval(playbackTimerRef.current); playbackTimerRef.current = null; }
+    setRecordedStates([]);
+    setIsPlayingTimeline(false);
+    setActiveTimelineIndex(null);
+    setTrainingStatus("Recording timeline cleared.");
+  }, []);
+
+  const playTimeline = useCallback(() => {
+    if (recordedStates.length === 0) return;
+    setIsPlayingTimeline(true);
+    let idx = 0;
+    setActiveTimelineIndex(0);
+    const state = recordedStates[0];
+    setMode(state.mode);
+    setParams(state.params);
+    setNoiseType(state.noiseType);
+
+    playbackTimerRef.current = setInterval(() => {
+      idx++;
+      if (idx >= recordedStates.length) {
+        if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
+        playbackTimerRef.current = null;
+        setIsPlayingTimeline(false);
+        setActiveTimelineIndex(null);
+        setTrainingStatus("Timeline playback finished.");
+        return;
+      }
+      setActiveTimelineIndex(idx);
+      const s = recordedStates[idx];
+      setMode(s.mode);
+      setParams(s.params);
+      setNoiseType(s.noiseType);
+    }, 600);
+  }, [recordedStates]);
+
+  const stopTimeline = useCallback(() => {
+    if (playbackTimerRef.current) { clearInterval(playbackTimerRef.current); playbackTimerRef.current = null; }
+    setIsPlayingTimeline(false);
+    setActiveTimelineIndex(null);
+  }, []);
+
+  const jumpToRecordedState = useCallback((idx: number) => {
+    const state = recordedStates[idx];
+    if (!state) return;
+    setMode(state.mode);
+    setParams(state.params);
+    setNoiseType(state.noiseType);
+    setActiveTimelineIndex(idx);
+    setTrainingStatus(`Jumped to recorded state #${idx + 1}.`);
+  }, [recordedStates]);
+
+  // ── Comparison mode ──
+  const toggleComparisonMode = useCallback(() => {
+    if (!comparisonMode) {
+      setComparisonSnapshot([...activeSignalData]);
+      setComparisonMode(true);
+      setTrainingStatus("Comparison mode ON. Snapshot A is locked. Change parameters to see Signal B.");
+    } else {
+      setComparisonMode(false);
+      setComparisonSnapshot(null);
+      setTrainingStatus("Comparison mode OFF.");
+    }
+  }, [comparisonMode, activeSignalData]);
+
+  // ── PDF export ──
+  const exportPdf = useCallback(() => {
+    window.print();
+  }, []);
 
   const downloadCurrentCsv = () => {
     const csvRows = ["time,message,carrier,modulated,instantaneousFrequency"];
@@ -1170,6 +1362,15 @@ function App() {
               </button>
               <button
                 type="button"
+                data-testid="header-theme-toggle"
+                onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-amber-500/40 hover:bg-slate-900"
+              >
+                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                {theme === "dark" ? "Light" : "Dark"}
+              </button>
+              <button
+                type="button"
                 data-testid="header-theory"
                 onClick={() => setTheoryOpen(true)}
                 className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-sky-500/40 hover:bg-slate-900"
@@ -1253,14 +1454,14 @@ function App() {
                   <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("simulator")} />
                 </div>
 
-                <div className="mt-5 flex rounded-2xl border border-white/10 bg-slate-950/70 p-1">
-                  {(["AM", "FM"] as SignalMode[]).map((signalMode) => (
+                <div className="mt-5 grid grid-cols-5 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1">
+                  {(["AM", "FM", "BPSK", "QPSK", "QAM"] as SignalMode[]).map((signalMode) => (
                     <button
                       key={signalMode}
                       type="button"
                       onClick={() => applyPreset(signalMode)}
                       className={cn(
-                        "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition",
+                        "rounded-xl px-2 py-2 text-xs font-medium transition",
                         mode === signalMode ? "bg-white text-slate-950 shadow-lg shadow-white/10" : "text-slate-400 hover:text-slate-200",
                       )}
                     >
@@ -1336,6 +1537,35 @@ function App() {
                     onChange={(value) => updateParam("noiseLevel", value)}
                     hint="Adds realistic noise so the classifier learns from less perfect signals."
                   />
+
+                  {/* ── Noise Type Selector ── */}
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">Noise type</p>
+                    <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-white/10 bg-slate-900 p-1">
+                      {(["AWGN", "Rayleigh", "Impulse"] as NoiseType[]).map((nt) => (
+                        <button
+                          key={nt}
+                          type="button"
+                          onClick={() => setNoiseType(nt)}
+                          className={cn(
+                            "rounded-lg px-2 py-1.5 text-xs font-medium transition",
+                            noiseType === nt
+                              ? nt === "AWGN" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                : nt === "Rayleigh" ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                                : "bg-red-500/20 text-red-300 border border-red-500/30"
+                              : "text-slate-400 hover:text-slate-200 border border-transparent",
+                          )}
+                        >
+                          {nt}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      {noiseType === "AWGN" ? "Additive White Gaussian Noise — standard channel model."
+                        : noiseType === "Rayleigh" ? "Rayleigh fading — models multipath signal loss."
+                        : "Impulse noise — sparse random high-magnitude spikes."}
+                    </p>
+                  </div>
                   <ParamControl
                     label="Phase"
                     value={params.phase}
@@ -1369,6 +1599,68 @@ function App() {
                     onChange={(value) => updateParam("sampleRate", value)}
                     hint="Keep the sample rate well above the carrier frequency for a clean waveform preview."
                   />
+                </div>
+
+                {/* ── Signal Info Panel ── */}
+                <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-sky-200">Signal Info Panel</p>
+                  <div className="mt-3 grid gap-2 grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Noise Type</p>
+                      <p className={cn("mt-1 text-sm font-semibold",
+                        noiseType === "AWGN" ? "text-emerald-300" : noiseType === "Rayleigh" ? "text-sky-300" : "text-red-300"
+                      )}>{noiseType}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Envelope Depth (μ)</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-100">{modulationIndex.toFixed(3)}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Phase Offset</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-100">{params.phase.toFixed(2)} rad ({(params.phase * 180 / Math.PI).toFixed(1)}°)</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Duration</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-100">{(params.duration * 1000).toFixed(2)} ms</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Sample Rate</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-100">{params.sampleRate >= 1_000_000 ? `${(params.sampleRate / 1_000_000).toFixed(2)} MHz` : `${(params.sampleRate / 1_000).toFixed(1)} kHz`}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">SNR Estimate</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-100">{estimatedSnr}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Recording Timeline ── */}
+                <div className="mt-4 rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-violet-200">Signal Recording</p>
+                  <div className="mt-3 grid gap-2 grid-cols-2">
+                    <FeatureButton label={`Record (${recordedStates.length}/10)`} icon={<Circle size={15} />} tone="violet" onClick={recordCurrentState} />
+                    <FeatureButton label={isPlayingTimeline ? "Stop" : "Play"} icon={isPlayingTimeline ? <Pause size={15} /> : <Play size={15} />} tone="emerald" onClick={isPlayingTimeline ? stopTimeline : playTimeline} disabled={recordedStates.length === 0} />
+                    <FeatureButton label="Clear" icon={<X size={15} />} tone="amber" onClick={clearTimeline} disabled={recordedStates.length === 0} />
+                    <FeatureButton label={comparisonMode ? "Exit Compare" : "Compare"} icon={<Copy size={15} />} tone="sky" onClick={toggleComparisonMode} />
+                  </div>
+                  {recordedStates.length > 0 && (
+                    <div className="mt-3 flex items-center gap-1.5 overflow-x-auto py-1">
+                      {recordedStates.map((rs, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => jumpToRecordedState(idx)}
+                          className={cn(
+                            "flex shrink-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] transition",
+                            activeTimelineIndex === idx ? "bg-violet-500/20 text-violet-200 timeline-dot-active" : "text-slate-400 hover:text-slate-200",
+                          )}
+                        >
+                          <span className={cn("size-2.5 rounded-full", activeTimelineIndex === idx ? "bg-violet-400" : "bg-slate-600")} />
+                          <span>{rs.mode}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.section>
 
@@ -1459,6 +1751,41 @@ function App() {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
+
+                  {/* ── Side-by-side comparison ── */}
+                  {comparisonMode && comparisonSnapshot && (
+                    <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+                      <p className="text-xs uppercase tracking-[0.25em] text-sky-200 mb-3">Side-by-Side Comparison</p>
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div>
+                          <p className="text-xs font-medium text-amber-200 mb-2">Snapshot A (locked)</p>
+                          <div className="h-[200px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={comparisonSnapshot.filter((_, i) => i % Math.max(1, Math.ceil(comparisonSnapshot.length / 800)) === 0)} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="time" stroke="#475569" tick={{ fill: "#64748b", fontSize: 9 }} tickFormatter={formatTimeLabel} />
+                                <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 9 }} domain={["auto", "auto"]} />
+                                <Line type="monotone" dataKey="modulated" stroke="#f59e0b" strokeWidth={2} dot={false} name="Snapshot A" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-emerald-200 mb-2">Signal B (live)</p>
+                          <div className="h-[200px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="time" stroke="#475569" tick={{ fill: "#64748b", fontSize: 9 }} tickFormatter={formatTimeLabel} />
+                                <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 9 }} domain={["auto", "auto"]} />
+                                <Line type="monotone" dataKey="modulated" stroke="#34d399" strokeWidth={2} dot={false} name="Live signal" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <MetricBlock label="Message amplitude" value={`${params.messageAmplitude.toFixed(1)} V`} icon={<Activity size={16} />} tone="sky" />
@@ -1670,6 +1997,46 @@ function App() {
                     <ActionButton onClick={() => setActivePage("analysis")} variant="secondary-neutral" icon={<BrainCircuit size={16} />}>
                       Open AI Analysis
                     </ActionButton>
+                    <ActionButton onClick={exportPdf} variant="secondary-sky" icon={<Printer size={16} />}>
+                      Export PDF
+                    </ActionButton>
+                  </div>
+                </motion.section>
+
+                {/* ── Animated Signal Flow Block Diagram ── */}
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.07 }}
+                  className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-sky-300">Animated Signal Flow</p>
+                  <p className="mt-2 text-sm text-slate-400">Visual representation of the communication pipeline from source to receiver.</p>
+                  <div className="mt-5 flex items-center gap-0 overflow-x-auto py-4">
+                    {[
+                      { label: "Source", color: "from-sky-500 to-sky-600", icon: "📡" },
+                      { label: "Modulator", color: "from-violet-500 to-violet-600", icon: "⚡" },
+                      { label: "Channel", color: "from-amber-500 to-amber-600", icon: "🌊" },
+                      { label: "Demodulator", color: "from-emerald-500 to-emerald-600", icon: "🔧" },
+                      { label: "Receiver", color: "from-rose-500 to-rose-600", icon: "📻" },
+                    ].map((block, idx, arr) => (
+                      <div key={block.label} className="flex items-center">
+                        <div className={`signal-flow-block flex shrink-0 flex-col items-center gap-2 rounded-2xl bg-gradient-to-br ${block.color} px-4 py-3 text-white shadow-lg`}>
+                          <span className="text-2xl">{block.icon}</span>
+                          <span className="text-xs font-semibold whitespace-nowrap">{block.label}</span>
+                        </div>
+                        {idx < arr.length - 1 && (
+                          <div className="signal-flow-connector mx-1 h-0.5 w-10 bg-gradient-to-r from-slate-500 to-slate-600 shrink-0" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-5">
+                    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-center text-[10px] text-slate-400">Message: {signalSource === "text" ? "Text bits" : "Sine wave"}</div>
+                    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-center text-[10px] text-slate-400">{mode} modulation</div>
+                    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-center text-[10px] text-slate-400">{noiseType} noise</div>
+                    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-center text-[10px] text-slate-400">SNR: {estimatedSnr}</div>
+                    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-center text-[10px] text-slate-400">AI: {deepLearningEnabled ? "ON" : "OFF"}</div>
                   </div>
                 </motion.section>
 
@@ -1954,9 +2321,11 @@ function App() {
                         Demodulation and spectrum tools are kept on this page so the main simulator graph remains focused and uncluttered.
                       </p>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <FeatureButton label={showRecovered ? "Hide demodulation" : "Show demodulation"} icon={<Activity size={15} />} tone="sky" onClick={() => setShowRecovered((value) => !value)} />
                       <FeatureButton label={showSpectrum ? "Hide spectrum" : "Show spectrum"} icon={<Gauge size={15} />} tone="emerald" onClick={() => setShowSpectrum((value) => !value)} />
+                      <FeatureButton label={showEyeDiagram ? "Hide eye diagram" : "Show eye diagram"} icon={<Eye size={15} />} tone="violet" onClick={() => setShowEyeDiagram((v) => !v)} />
+                      <FeatureButton label={showConstellation ? "Hide constellation" : "Show constellation"} icon={<Circle size={15} />} tone="amber" onClick={() => setShowConstellation((v) => !v)} />
                     </div>
                   </div>
 
@@ -2033,6 +2402,127 @@ function App() {
                       Turn on Demodulation or Spectrum above to view the extra analysis charts here.
                     </div>
                   )}
+                </motion.section>
+
+                {/* ── Eye Diagram ── */}
+                {showEyeDiagram && (
+                  <motion.section
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, delay: 0.13 }}
+                    className="rounded-3xl border border-violet-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                  >
+                    <p className="text-base font-semibold text-violet-300">Eye Diagram</p>
+                    <p className="mt-2 text-sm text-slate-400">Overlaid traces folded at the symbol period — best for digital modes (BPSK/QPSK/QAM).</p>
+                    <div className="mt-4 h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
+                          <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                          <XAxis
+                            dataKey="x"
+                            type="number"
+                            domain={[0, 2]}
+                            stroke="#475569"
+                            tick={{ fill: "#64748b", fontSize: 10 }}
+                            label={{ value: "Symbol Period", position: "insideBottomRight", offset: -4, fill: "#64748b", fontSize: 11 }}
+                          />
+                          <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                          <Tooltip contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }} />
+                          {eyeDiagramData.traces.slice(0, 30).map((trace, idx) => (
+                            <Line
+                              key={idx}
+                              data={trace.points.filter((_, i) => i % 2 === 0)}
+                              type="monotone"
+                              dataKey="y"
+                              stroke={`rgba(167, 139, 250, ${0.15 + Math.min(idx * 0.02, 0.35)})`}
+                              strokeWidth={1.2}
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.section>
+                )}
+
+                {/* ── Constellation Diagram ── */}
+                {showConstellation && (
+                  <motion.section
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, delay: 0.15 }}
+                    className="rounded-3xl border border-amber-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                  >
+                    <p className="text-base font-semibold text-amber-300">Constellation Diagram (I/Q)</p>
+                    <p className="mt-2 text-sm text-slate-400">{isDigitalMode ? "Ideal symbol positions shown as scatter points." : "Coherent demodulation I vs Q representation."}</p>
+                    <div className="mt-4 h-[340px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ScatterChart margin={{ top: 16, right: 24, left: 16, bottom: 16 }}>
+                          <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="i"
+                            type="number"
+                            name="In-Phase (I)"
+                            stroke="#475569"
+                            tick={{ fill: "#64748b", fontSize: 10 }}
+                            label={{ value: "In-Phase (I)", position: "insideBottomRight", offset: -4, fill: "#64748b", fontSize: 11 }}
+                          />
+                          <YAxis
+                            dataKey="q"
+                            type="number"
+                            name="Quadrature (Q)"
+                            stroke="#475569"
+                            tick={{ fill: "#64748b", fontSize: 10 }}
+                            label={{ value: "Quadrature (Q)", position: "insideTopLeft", offset: 8, fill: "#64748b", fontSize: 11 }}
+                          />
+                          <ZAxis range={[40, 80]} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }}
+                            labelStyle={{ color: "#cbd5e1" }}
+                            formatter={(value: number) => value.toFixed(4)}
+                          />
+                          <Scatter
+                            data={constellationData.slice(0, 200)}
+                            fill="#fbbf24"
+                            fillOpacity={0.7}
+                          />
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.section>
+                )}
+
+                {/* ── BER Calculator ── */}
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.17 }}
+                  className="rounded-3xl border border-emerald-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+                >
+                  <p className="text-base font-semibold text-emerald-300">BER Calculator</p>
+                  <p className="mt-2 text-sm text-slate-400">Bit error rate comparison: theoretical vs simulated from current signal.</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">SNR</p>
+                      <p className="mt-2 text-lg font-semibold text-sky-300">{berResult.snrDb.toFixed(1)} dB</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Theoretical BER</p>
+                      <p className="mt-2 text-lg font-semibold text-emerald-300">{berResult.theoretical < 1e-9 ? "< 10⁻⁹" : berResult.theoretical.toExponential(2)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Simulated BER</p>
+                      <p className="mt-2 text-lg font-semibold text-amber-300">{berResult.simulated === 0 ? "0 (no errors)" : berResult.simulated.toExponential(2)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/60 p-3">
+                    <p className="text-xs text-slate-400">
+                      {isDigitalMode
+                        ? `${mode} theoretical BER uses Q-function approximation. Simulated BER counts decision errors at symbol boundaries.`
+                        : `${mode} BER is an empirical approximation. Increase noise to observe BER rise.`}
+                    </p>
+                  </div>
                 </motion.section>
               </div>
 
