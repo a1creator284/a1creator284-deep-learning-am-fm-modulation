@@ -2893,10 +2893,10 @@ function FeatureButton({
   testId?: string;
 }) {
   const toneClasses = {
-    sky: "border-sky-500/20 bg-sky-500/10 text-sky-300 hover:border-sky-400/40 hover:bg-sky-500/15",
-    emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400/40 hover:bg-emerald-500/15",
-    violet: "border-violet-500/20 bg-violet-500/10 text-violet-300 hover:border-violet-400/40 hover:bg-violet-500/15",
-    amber: "border-amber-500/20 bg-amber-500/10 text-amber-200 hover:border-amber-400/40 hover:bg-amber-500/15",
+    sky: "feature-btn border-sky-500/20 bg-sky-500/10 text-sky-300 hover:border-sky-400/40 hover:bg-sky-500/15",
+    emerald: "feature-btn border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400/40 hover:bg-emerald-500/15",
+    violet: "feature-btn border-violet-500/20 bg-violet-500/10 text-violet-300 hover:border-violet-400/40 hover:bg-violet-500/15",
+    amber: "feature-btn border-amber-500/20 bg-amber-500/10 text-amber-200 hover:border-amber-400/40 hover:bg-amber-500/15",
   };
 
   return (

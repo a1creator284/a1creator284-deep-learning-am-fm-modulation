@@ -364,7 +364,101 @@ html.light .shadow-lg {
   box-shadow: 0 10px 15px -3px rgba(148, 163, 184, 0.12) !important;
 }
 
-/* Range/slider accent color in light mode */
+/* Range input styling for light mode */
 html.light input[type="range"] {
   accent-color: #0284c7;
+  background: transparent !important;
+}
+
+html.light input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #cbd5e1;
+  border: 1px solid #94a3b8;
+}
+
+html.light input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+html.light input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #cbd5e1;
+  border: 1px solid #94a3b8;
+}
+
+html.light input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+/* Also fix bg-slate-800 used on range container to not be a dark blob */
+html.light input[type="range"].bg-slate-800 {
+  background: transparent !important;
+}
+
+/* FeatureButton light mode overrides — solid backgrounds, strong borders, dark text */
+html.light .feature-btn {
+  background-color: #f8fafc !important;
+  border-width: 1.5px !important;
+  font-weight: 600 !important;
+}
+
+html.light .feature-btn.border-sky-500\/20 {
+  border-color: #7dd3fc !important;
+  color: #0369a1 !important;
+  background-color: #e0f2fe !important;
+}
+
+html.light .feature-btn.border-sky-500\/20:hover {
+  border-color: #38bdf8 !important;
+  background-color: #bae6fd !important;
+}
+
+html.light .feature-btn.border-emerald-500\/20 {
+  border-color: #6ee7b7 !important;
+  color: #047857 !important;
+  background-color: #d1fae5 !important;
+}
+
+html.light .feature-btn.border-emerald-500\/20:hover {
+  border-color: #34d399 !important;
+  background-color: #a7f3d0 !important;
+}
+
+html.light .feature-btn.border-violet-500\/20 {
+  border-color: #c4b5fd !important;
+  color: #6d28d9 !important;
+  background-color: #ede9fe !important;
+}
+
+html.light .feature-btn.border-violet-500\/20:hover {
+  border-color: #a78bfa !important;
+  background-color: #ddd6fe !important;
+}
+
+html.light .feature-btn.border-amber-500\/20 {
+  border-color: #fcd34d !important;
+  color: #b45309 !important;
+  background-color: #fef3c7 !important;
+}
+
+html.light .feature-btn.border-amber-500\/20:hover {
+  border-color: #fbbf24 !important;
+  background-color: #fde68a !important;
 }
