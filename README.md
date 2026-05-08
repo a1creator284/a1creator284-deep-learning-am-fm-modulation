@@ -8,7 +8,8 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
-| 2026-05-09 | Added comprehensive "Proof of Accuracy" section on AI Analysis page — big number cards (before/after/gain), animated accuracy bars, noise-vs-accuracy proof table (6 noise levels), per-class AM/FM/PM breakdown, methodology comparison (traditional weaknesses vs DL advantages), and a ready-made viva answer paragraph |
+| 2026-05-09 | Added 5 new features: (1) "How It Works" 4-step flow on landing page; (2) Live SNR gauge with 20-segment color bar (green=ideal, red=severe); (3) Mode-change callout banner explaining what changed when switching AM/FM/PM; (4) Keyboard shortcuts A/F/P/T/Space; (5) Floating ? button + shortcut hint overlay panel |
+| 2026-05-09 | Added comprehensive "Proof of Accuracy" section on AI Analysis page |
 | 2026-05-09 | Premium UI polish — FeatureButton gets motion hover/tap + shadow glow; MetricBlock gets icon box, corner accent, shimmer, hover lift; ParamControl gets colored dot, value badge, live progress bar fill, hover border; AM/FM/PM mode switcher redesigned as tall cards with layoutId animation and per-mode glow; waveform panel header gets icon box + subtitle |
 | 2026-05-09 | Fixed light mode ParamControl visibility — number input, range slider track, and value label now use proper light backgrounds and dark text |
 | 2026-05-09 | Major UI overhaul — animated landing page with waveform bars, gradient text, glowing stat cards; animated grid background; graph cards with scan-line sweep, pulsing dot indicators, staggered slide-in animations; recharts line draw-on animation; header "Lab" gradient text; metric cards fade-in; button press scale effect; new CSS animations: float, shimmer, border-glow, scan-line, gradient-shift |

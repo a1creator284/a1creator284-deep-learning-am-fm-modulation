@@ -490,6 +490,8 @@ function App() {
   const [activeTimelineIndex, setActiveTimelineIndex] = useState<number | null>(null);
   const [showEyeDiagram, setShowEyeDiagram] = useState(false);
   const [showConstellation, setShowConstellation] = useState(false);
+  const [showKeyboardHints, setShowKeyboardHints] = useState(false);
+  const [modeChangedFrom, setModeChangedFrom] = useState<SignalMode | null>(null);
   const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const modelRef = useRef<MiniModel | null>(null);
@@ -541,6 +543,27 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [theoryOpen]);
+
+  // Keyboard shortcuts (Feature 4)
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      switch (e.key.toLowerCase()) {
+        case "a": applyPreset("AM"); break;
+        case "f": applyPreset("FM"); break;
+        case "p": applyPreset("PM"); break;
+        case "t": if (!isTraining) void trainModel(); break;
+        case " ": e.preventDefault(); captureSnapshot(); break;
+        case "?": setShowKeyboardHints((v) => !v); break;
+        case "escape": setShowKeyboardHints(false); break;
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTraining]);
 
   useEffect(() => {
     return () => {
@@ -684,10 +707,12 @@ function App() {
   };
 
   const applyPreset = (preset: SignalMode) => {
+    setModeChangedFrom((prev) => prev ?? mode);
     setMode(preset);
     setParams(PRESET_BY_MODE[preset]);
     setPrediction(null);
     setTrainingStatus(`${preset} preset loaded. You can now adjust values or train the model.`);
+    setTimeout(() => setModeChangedFrom(null), 4500);
   };
 
   const resetCurrentMode = () => {
@@ -1423,6 +1448,59 @@ function App() {
                 />
               ))}
             </motion.div>
+
+            {/* How It Works */}
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 1.3 }}
+              className="pt-6"
+            >
+              <p className="mb-6 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">How It Works</p>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {([
+                  { step: "01", label: "AM", title: "Generate Signal", desc: "A cosine message at 10 kHz rides on a 100 kHz carrier", color: "sky" },
+                  { step: "02", label: "MOD", title: "Modulate", desc: "AM, FM, or PM math transforms the carrier waveform", color: "violet" },
+                  { step: "03", label: "CH", title: "Add Noise", desc: "AWGN, Rayleigh, or Impulse noise simulates a real channel", color: "amber" },
+                  { step: "04", label: "AI", title: "AI Classifies", desc: "1D-CNN identifies the modulation type with 85%+ accuracy", color: "emerald" },
+                ] as const).map(({ step, label, title, desc, color }, i) => (
+                  <motion.div
+                    key={step}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 1.4 + i * 0.12 }}
+                    className={`relative rounded-2xl border bg-slate-900/60 p-4 text-left backdrop-blur ${
+                      color === "sky" ? "border-sky-500/25" :
+                      color === "violet" ? "border-violet-500/25" :
+                      color === "amber" ? "border-amber-500/25" :
+                      "border-emerald-500/25"
+                    }`}
+                  >
+                    {i < 3 && (
+                      <div className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 md:block">
+                        <div className="h-px w-4 bg-gradient-to-r from-slate-600 to-transparent" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold tracking-[0.2em] ${
+                        color === "sky" ? "text-sky-500" :
+                        color === "violet" ? "text-violet-500" :
+                        color === "amber" ? "text-amber-500" :
+                        "text-emerald-500"
+                      }`}>{step}</span>
+                      <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                        color === "sky" ? "bg-sky-500/20 text-sky-300" :
+                        color === "violet" ? "bg-violet-500/20 text-violet-300" :
+                        color === "amber" ? "bg-amber-500/20 text-amber-300" :
+                        "bg-emerald-500/20 text-emerald-300"
+                      }`}>{label}</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-white">{title}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{desc}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
         </div>
       </div>
@@ -2120,7 +2198,46 @@ function App() {
                   </div>
                 </motion.section>
 
+                {/* Mode-change callout (Feature 3) */}
+                <AnimatePresence>
+                  {modeChangedFrom && modeChangedFrom !== mode && (
+                    <motion.div
+                      key={`callout-${mode}`}
+                      initial={{ opacity: 0, y: -10, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                      transition={{ duration: 0.3 }}
+                      className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-5 py-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={cn(
+                          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black",
+                          mode === "AM" ? "bg-sky-500/20 text-sky-300" : mode === "FM" ? "bg-emerald-500/20 text-emerald-300" : "bg-violet-500/20 text-violet-300"
+                        )}>
+                          {mode}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-sky-200">
+                            Switched {modeChangedFrom} to {mode}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">
+                            {mode === "AM"
+                              ? `Amplitude now varies with the message. Carrier frequency stays fixed at ${params.carrierFrequency.toFixed(0)} Hz. Modulation index mu = ${(params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001)).toFixed(2)}.`
+                              : mode === "FM"
+                              ? `Amplitude is now constant. Instantaneous frequency swings +/-${params.frequencyDeviation.toFixed(0)} Hz around the ${params.carrierFrequency.toFixed(0)} Hz carrier. Beta = ${(params.frequencyDeviation / Math.max(params.messageFrequency, 1)).toFixed(2)}.`
+                              : `Phase of the carrier now shifts proportionally to the message. Carrier amplitude stays constant at ${params.carrierAmplitude.toFixed(1)} V. kp = ${(params.frequencyDeviation / Math.max(params.messageAmplitude, 0.0001)).toFixed(2)} rad/V.`}
+                          </p>
+                        </div>
+                        <button type="button" onClick={() => setModeChangedFrom(null)} className="ml-auto shrink-0 text-slate-500 hover:text-slate-300 transition-colors">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  {/* Formula card */}
                   <div className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur">
                     <div className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-slate-500">
                       <Radio size={14} />
@@ -2129,16 +2246,62 @@ function App() {
                     <p className="mt-3 break-words font-mono text-sm leading-6 text-sky-300">{formula}</p>
                     <p className="mt-3 text-sm leading-6 text-slate-400">{formulaDescription}</p>
                   </div>
-                  <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 shadow-2xl shadow-black/20 backdrop-blur">
-                    <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Cleaner workspace</p>
-                    <p className="mt-3 text-sm leading-6 text-emerald-50/90">
-                      The simulator page now focuses only on signal tuning and graph inspection. Audio tools, AI report cards, backend integration, and diagnostics are split into dedicated pages so the layout stays clean.
-                    </p>
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+
+                  {/* SNR live gauge (Feature 2) */}
+                  <div className="rounded-3xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Live SNR Gauge</p>
+                      <span className={cn(
+                        "rounded-full border px-2.5 py-1 text-xs font-bold",
+                        params.noiseLevel === 0
+                          ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                          : params.noiseLevel < 0.08
+                          ? "border-sky-500/40 bg-sky-500/15 text-sky-300"
+                          : params.noiseLevel < 0.18
+                          ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
+                          : "border-red-500/40 bg-red-500/15 text-red-300"
+                      )}>
+                        {params.noiseLevel === 0 ? "Ideal" : params.noiseLevel < 0.08 ? "Good" : params.noiseLevel < 0.18 ? "Degraded" : "Severe"}
+                      </span>
+                    </div>
+                    <motion.p
+                      key={estimatedSnr}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className={cn(
+                        "mt-3 text-4xl font-black tabular-nums",
+                        params.noiseLevel === 0 ? "text-emerald-400"
+                          : params.noiseLevel < 0.08 ? "text-sky-400"
+                          : params.noiseLevel < 0.18 ? "text-amber-400"
+                          : "text-red-400"
+                      )}
+                    >
+                      {estimatedSnr}
+                    </motion.p>
+                    {/* 20-segment bar: left=bad (red), right=good (green) */}
+                    <div className="mt-4 flex gap-0.5">
+                      {Array.from({ length: 20 }).map((_, i) => {
+                        const snrNum = params.noiseLevel <= 0
+                          ? 999
+                          : 20 * Math.log10(params.carrierAmplitude / Math.max(params.noiseLevel, 0.001));
+                        const filled = snrNum >= (40 * (i + 1) / 20);
+                        const segColor = i < 5 ? "bg-red-500" : i < 10 ? "bg-amber-400" : i < 15 ? "bg-sky-400" : "bg-emerald-400";
+                        return (
+                          <div
+                            key={i}
+                            className={cn("h-5 flex-1 rounded-sm transition-all duration-300", filled ? segColor : "bg-slate-800")}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="mt-1 flex justify-between text-[9px] text-slate-600">
+                      <span>Severe</span><span>Degraded</span><span>Good</span><span>Ideal</span>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
                       <FeatureButton label="Flow & Report" icon={<FileText size={15} />} tone="sky" onClick={() => setActivePage("flow")} />
-                      <FeatureButton label="Audio Lab" icon={<PlayCircle size={15} />} tone="violet" onClick={() => setActivePage("audio")} />
                       <FeatureButton label="AI Analysis" icon={<BrainCircuit size={15} />} tone="emerald" onClick={() => setActivePage("analysis")} />
-                      <FeatureButton label="Backend & Tests" icon={<Server size={15} />} tone="amber" onClick={() => setActivePage("backend")} />
+                      <FeatureButton label="Audio Lab" icon={<PlayCircle size={15} />} tone="violet" onClick={() => setActivePage("audio")} />
                       <FeatureButton label="Open theory" icon={<BookOpen size={15} />} tone="sky" onClick={() => setTheoryOpen(true)} />
                     </div>
                   </div>
@@ -3351,6 +3514,64 @@ function App() {
         {helpPage ? <PageHelpModal page={helpPage} onClose={() => setHelpPage(null)} /> : null}
         {theoryOpen ? <TheoryModal onClose={() => setTheoryOpen(false)} activeMode={mode} /> : null}
       </AnimatePresence>
+
+      {/* Keyboard shortcut hint overlay (Feature 5) */}
+      <AnimatePresence>
+        {showKeyboardHints && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            transition={{ duration: 0.22 }}
+            className="fixed bottom-20 right-6 z-50 w-72 rounded-2xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 backdrop-blur"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-300">Keyboard Shortcuts</p>
+              <button type="button" onClick={() => setShowKeyboardHints(false)} className="text-slate-500 transition-colors hover:text-slate-300">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {([
+                { key: "A", desc: "Switch to AM mode", color: "sky" },
+                { key: "F", desc: "Switch to FM mode", color: "emerald" },
+                { key: "P", desc: "Switch to PM mode", color: "violet" },
+                { key: "T", desc: "Train the AI model", color: "emerald" },
+                { key: "Space", desc: "Capture waveform snapshot", color: "amber" },
+                { key: "?", desc: "Toggle this panel", color: "slate" },
+                { key: "Esc", desc: "Close this panel", color: "slate" },
+              ] as const).map(({ key, desc, color }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <kbd className={cn(
+                    "inline-flex min-w-[2.2rem] items-center justify-center rounded-lg border px-2 py-1 text-xs font-bold",
+                    color === "sky"     ? "border-sky-500/40 bg-sky-500/15 text-sky-300" :
+                    color === "emerald" ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" :
+                    color === "violet"  ? "border-violet-500/40 bg-violet-500/15 text-violet-300" :
+                    color === "amber"   ? "border-amber-500/40 bg-amber-500/15 text-amber-300" :
+                    "border-white/10 bg-slate-800 text-slate-400"
+                  )}>
+                    {key}
+                  </kbd>
+                  <span className="text-xs text-slate-400">{desc}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[10px] text-slate-600">Shortcuts work when not typing in an input field</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Persistent shortcut hint button */}
+      <motion.button
+        type="button"
+        onClick={() => setShowKeyboardHints((v) => !v)}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.94 }}
+        title="Keyboard shortcuts — press ? anytime"
+        className="fixed bottom-6 right-6 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-slate-900/90 text-slate-400 shadow-lg backdrop-blur transition hover:border-white/30 hover:text-slate-200"
+      >
+        <span className="text-sm font-bold">?</span>
+      </motion.button>
     </div>
   );
 }
