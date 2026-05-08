@@ -368,3 +368,44 @@ html.light .border-white\/10 {
 html.light .text-slate-500 {
   color: #64748b !important;
 }
+
+/* ── ParamControl redesign — light mode ──────────────────────────── */
+
+/* Value badge */
+html.light .rounded-lg.border.border-white\/10.bg-slate-900\/80 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Progress bar track */
+html.light .bg-slate-800\/80 {
+  background-color: #e2e8f0 !important;
+}
+
+/* ParamControl hover border */
+html.light .hover\:border-white\/20:hover {
+  border-color: #94a3b8 !important;
+}
+
+/* Mode switcher cards in light mode */
+html.light .bg-slate-950\/50 {
+  background-color: #f8fafc !important;
+}
+
+/* ── MetricBlock light mode ───────────────────────────────────────── */
+html.light .bg-sky-500\/8,
+html.light .bg-emerald-500\/8,
+html.light .bg-violet-500\/8,
+html.light .bg-amber-500\/8 {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-sky-500\/15     { background-color: #e0f2fe !important; }
+html.light .bg-emerald-500\/15 { background-color: #d1fae5 !important; }
+html.light .bg-violet-500\/15  { background-color: #ede9fe !important; }
+html.light .bg-amber-500\/15   { background-color: #fef3c7 !important; }
+
+/* ── Waveform section header icon box ────────────────────────────── */
+html.light .bg-sky-500\/15 {
+  background-color: #e0f2fe !important;
+}

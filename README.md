@@ -8,6 +8,7 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
+| 2026-05-09 | Premium UI polish — FeatureButton gets motion hover/tap + shadow glow; MetricBlock gets icon box, corner accent, shimmer, hover lift; ParamControl gets colored dot, value badge, live progress bar fill, hover border; AM/FM/PM mode switcher redesigned as tall cards with layoutId animation and per-mode glow; waveform panel header gets icon box + subtitle |
 | 2026-05-09 | Fixed light mode ParamControl visibility — number input, range slider track, and value label now use proper light backgrounds and dark text |
 | 2026-05-09 | Major UI overhaul — animated landing page with waveform bars, gradient text, glowing stat cards; animated grid background; graph cards with scan-line sweep, pulsing dot indicators, staggered slide-in animations; recharts line draw-on animation; header "Lab" gradient text; metric cards fade-in; button press scale effect; new CSS animations: float, shimmer, border-glow, scan-line, gradient-shift |
 | 2026-05-09 | Fixed help modal overlap on scroll — removed sticky header inside scrollable container; outer overlay now scrolls, modal card is fully opaque with no bleed-through |

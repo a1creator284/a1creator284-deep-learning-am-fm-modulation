@@ -1566,28 +1566,70 @@ function App() {
                 transition={{ duration: 0.45, delay: 0.05 }}
                 className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur"
               >
+                {/* Panel header */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-base font-semibold text-sky-400">
-                    <SlidersHorizontal size={18} />
-                    Signal Controls
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400">
+                      <SlidersHorizontal size={18} />
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-white">Signal Controls</p>
+                      <p className="text-xs text-slate-500">Tune parameters in real time</p>
+                    </div>
                   </div>
                   <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("simulator")} />
                 </div>
 
-                <div className="mt-5 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1">
-                  {(["AM", "FM", "PM"] as SignalMode[]).map((signalMode) => (
-                    <button
-                      key={signalMode}
-                      type="button"
-                      onClick={() => applyPreset(signalMode)}
-                      className={cn(
-                        "rounded-xl px-2 py-2 text-xs font-medium transition",
-                        mode === signalMode ? "bg-white text-slate-950 shadow-lg shadow-white/10" : "text-slate-400 hover:text-slate-200",
-                      )}
-                    >
-                      {signalMode}
-                    </button>
-                  ))}
+                {/* Mode switcher */}
+                <div className="mt-5">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Modulation Mode</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: "AM" as SignalMode, color: "sky",     desc: "Amplitude" },
+                      { id: "FM" as SignalMode, color: "emerald", desc: "Frequency" },
+                      { id: "PM" as SignalMode, color: "violet",  desc: "Phase" },
+                    ]).map(({ id, color, desc }) => (
+                      <motion.button
+                        key={id}
+                        type="button"
+                        onClick={() => applyPreset(id)}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.96 }}
+                        className={cn(
+                          "relative flex flex-col items-center gap-0.5 overflow-hidden rounded-2xl border py-3 text-center transition-all",
+                          mode === id
+                            ? color === "sky"
+                              ? "border-sky-500/50 bg-sky-500/15 shadow-lg shadow-sky-500/20"
+                              : color === "emerald"
+                              ? "border-emerald-500/50 bg-emerald-500/15 shadow-lg shadow-emerald-500/20"
+                              : "border-violet-500/50 bg-violet-500/15 shadow-lg shadow-violet-500/20"
+                            : "border-white/10 bg-slate-950/50 hover:border-white/20",
+                        )}
+                      >
+                        {mode === id && (
+                          <motion.div
+                            layoutId="mode-indicator"
+                            className={cn(
+                              "absolute inset-0 rounded-2xl opacity-10",
+                              color === "sky" ? "bg-sky-400" : color === "emerald" ? "bg-emerald-400" : "bg-violet-400"
+                            )}
+                          />
+                        )}
+                        <span className={cn(
+                          "text-base font-black tracking-tight",
+                          mode === id
+                            ? color === "sky" ? "text-sky-300" : color === "emerald" ? "text-emerald-300" : "text-violet-300"
+                            : "text-slate-400"
+                        )}>{id}</span>
+                        <span className={cn(
+                          "text-[9px] uppercase tracking-[0.15em]",
+                          mode === id
+                            ? color === "sky" ? "text-sky-400/70" : color === "emerald" ? "text-emerald-400/70" : "text-violet-400/70"
+                            : "text-slate-600"
+                        )}>{desc}</span>
+                      </motion.button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -1795,15 +1837,21 @@ function App() {
                 >
                   <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
                     <div>
-                      <div className="flex items-center gap-2 text-lg font-semibold text-white">
-                        <Waves size={20} className="text-sky-400" />
-                        {signalSource === "text" ? `${mode} Text-Modulated Preview` : `${mode} Waveform Preview`}
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15">
+                          <Waves size={18} className="text-sky-400" />
+                        </div>
+                        <div>
+                          <p className="text-base font-bold text-white">
+                            {signalSource === "text" ? `${mode} Text-Modulated Preview` : `${mode} Waveform Preview`}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {signalSource === "text"
+                              ? "Text bits driving the message signal"
+                              : "Live signal — updates as you tune parameters"}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-sm text-slate-400">
-                        {signalSource === "text"
-                          ? "The graph is currently using your typed text as the message source before modulation."
-                          : "Watch the message, carrier, and modulated signal react in real time."}
-                      </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2 text-xs text-slate-400">
@@ -3146,26 +3194,28 @@ function FeatureButton({
   testId?: string;
 }) {
   const toneClasses = {
-    sky: "feature-btn border-sky-500/20 bg-sky-500/10 text-sky-300 hover:border-sky-400/40 hover:bg-sky-500/15",
-    emerald: "feature-btn border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400/40 hover:bg-emerald-500/15",
-    violet: "feature-btn border-violet-500/20 bg-violet-500/10 text-violet-300 hover:border-violet-400/40 hover:bg-violet-500/15",
-    amber: "feature-btn border-amber-500/20 bg-amber-500/10 text-amber-200 hover:border-amber-400/40 hover:bg-amber-500/15",
+    sky:     "feature-btn border-sky-500/25 bg-sky-500/10 text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20 hover:shadow-sky-500/20",
+    emerald: "feature-btn border-emerald-500/25 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400/60 hover:bg-emerald-500/20 hover:shadow-emerald-500/20",
+    violet:  "feature-btn border-violet-500/25 bg-violet-500/10 text-violet-300 hover:border-violet-400/60 hover:bg-violet-500/20 hover:shadow-violet-500/20",
+    amber:   "feature-btn border-amber-500/25 bg-amber-500/10 text-amber-200 hover:border-amber-400/60 hover:bg-amber-500/20 hover:shadow-amber-500/20",
   };
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
       disabled={disabled}
       data-testid={testId}
+      whileHover={{ scale: disabled ? 1 : 1.03, y: disabled ? 0 : -1 }}
+      whileTap={{ scale: disabled ? 1 : 0.96 }}
       className={cn(
-        "inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-center text-xs font-medium leading-5 whitespace-normal break-words transition disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-center text-xs font-semibold leading-5 whitespace-normal break-words transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50",
         toneClasses[tone],
       )}
     >
       {icon}
       <span>{label}</span>
-    </button>
+    </motion.button>
   );
 }
 
@@ -3193,14 +3243,30 @@ function ParamControl({
   testId?: string;
 }) {
   const accentClasses = {
-    sky: "accent-sky-400",
+    sky:     "accent-sky-400",
     emerald: "accent-emerald-400",
-    violet: "accent-violet-400",
-    amber: "accent-amber-400",
+    violet:  "accent-violet-400",
+    amber:   "accent-amber-400",
+  };
+
+  const accentBar = {
+    sky:     "bg-sky-400",
+    emerald: "bg-emerald-400",
+    violet:  "bg-violet-400",
+    amber:   "bg-amber-400",
+  };
+
+  const accentText = {
+    sky:     "text-sky-400",
+    emerald: "text-emerald-400",
+    violet:  "text-violet-400",
+    amber:   "text-amber-300",
   };
 
   const displayValue =
     step >= 1 ? value.toFixed(0) : step >= 0.1 ? value.toFixed(1) : step >= 0.01 ? value.toFixed(2) : step >= 0.001 ? value.toFixed(3) : value.toFixed(4);
+
+  const pct = ((value - min) / (max - min)) * 100;
 
   const handleNumberChange = (rawValue: string) => {
     const parsedValue = Number.parseFloat(rawValue);
@@ -3209,14 +3275,28 @@ function ParamControl({
   };
 
   return (
-    <div className="space-y-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-      <label className="flex flex-col gap-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-        <span className="break-words">{label}</span>
-        <span className="text-slate-200 sm:text-right">
-          {displayValue} {suffix}
+    <div className="group space-y-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4 transition-all hover:border-white/20">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className={cn("h-1.5 w-1.5 rounded-full", accentBar[accent])} />
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</span>
+        </div>
+        <span className={cn("rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1 text-xs font-bold tabular-nums", accentText[accent])}>
+          {displayValue}{suffix ? ` ${suffix}` : ""}
         </span>
-      </label>
-      <div className="grid gap-3 lg:grid-cols-[112px_1fr]">
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 w-full overflow-hidden rounded-full bg-slate-800/80">
+        <div
+          className={cn("h-full rounded-full transition-all duration-150", accentBar[accent])}
+          style={{ width: `${pct}%`, opacity: 0.7 }}
+        />
+      </div>
+
+      {/* Controls */}
+      <div className="grid gap-2 lg:grid-cols-[100px_1fr]">
         <input
           type="number"
           min={min}
@@ -3226,7 +3306,7 @@ function ParamControl({
           aria-label={`${label} number input`}
           data-testid={testId ? `${testId}-number` : undefined}
           onChange={(event) => handleNumberChange(event.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-sky-400/40"
+          className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-100 outline-none transition focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/20"
         />
         <input
           type="range"
@@ -3257,20 +3337,33 @@ function MetricBlock({
   tone: "sky" | "emerald" | "violet" | "amber";
 }) {
   const tones = {
-    sky: "text-sky-400",
-    emerald: "text-emerald-400",
-    violet: "text-violet-400",
-    amber: "text-amber-300",
+    sky:     { text: "text-sky-400",     border: "border-sky-500/20",     bg: "bg-sky-500/8",     glow: "hover:shadow-sky-500/15",     iconBg: "bg-sky-500/15" },
+    emerald: { text: "text-emerald-400", border: "border-emerald-500/20", bg: "bg-emerald-500/8", glow: "hover:shadow-emerald-500/15", iconBg: "bg-emerald-500/15" },
+    violet:  { text: "text-violet-400",  border: "border-violet-500/20",  bg: "bg-violet-500/8",  glow: "hover:shadow-violet-500/15",  iconBg: "bg-violet-500/15" },
+    amber:   { text: "text-amber-300",   border: "border-amber-500/20",   bg: "bg-amber-500/8",   glow: "hover:shadow-amber-500/15",   iconBg: "bg-amber-500/15" },
   };
+  const t = tones[tone];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
-        <span className={tones[tone]}>{icon}</span>
-        <span className="break-words">{label}</span>
+    <motion.div
+      whileHover={{ y: -2, scale: 1.01 }}
+      transition={{ duration: 0.18 }}
+      className={cn(
+        "relative overflow-hidden rounded-2xl border p-4 transition-all hover:shadow-lg metric-shimmer",
+        t.border, t.bg, t.glow,
+        "bg-slate-950/70"
+      )}
+    >
+      {/* Corner accent */}
+      <div className={cn("absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-20 blur-xl", t.iconBg)} />
+      <div className="flex items-center gap-2.5">
+        <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", t.iconBg)}>
+          <span className={t.text}>{icon}</span>
+        </div>
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500 break-words">{label}</p>
       </div>
-      <p className={cn("mt-3 break-words text-lg font-semibold sm:text-xl", tones[tone])}>{value}</p>
-    </div>
+      <p className={cn("mt-3 break-words text-xl font-bold sm:text-2xl", t.text)}>{value}</p>
+    </motion.div>
   );
 }
 
