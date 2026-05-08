@@ -604,6 +604,20 @@ function App() {
   const constellationData = useMemo(() => computeConstellationPoints(activeSignalData, params, mode), [activeSignalData, params, mode]);
   const berResult = useMemo(() => computeBER(activeSignalData, params, mode, params.noiseLevel), [activeSignalData, params, mode]);
 
+  // ── Training data preview (generated fresh each time params change) ──
+  const trainingPreviewData = useMemo(() => {
+    const previewDataset = buildSyntheticDataset(params, 3, SIGNAL_LENGTH);
+    const classNames = ['AM', 'FM', 'PM'] as const;
+    return classNames.map((className, classIndex) => {
+      const sample = previewDataset.find((s) => s.label === classIndex);
+      return {
+        className,
+        classIndex,
+        data: sample ? sample.features.map((value, index) => ({ index, value })) : [],
+      };
+    });
+  }, [params]);
+
   const modulationIndex = params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001);
   const bandwidth = mode === "AM" ? 2 * params.messageFrequency
     : mode === "FM" ? 2 * (params.frequencyDeviation + params.messageFrequency)
@@ -2264,6 +2278,47 @@ function App() {
                     <MiniStat label="Epochs" value={trainingEpochCount.toString()} />
                     <MiniStat label="Signal length" value={SIGNAL_LENGTH.toString()} />
                     <MiniStat label="Backend" value={summaryBackendText} />
+                  </div>
+
+                  {/* ── Training Data Preview ── */}
+                  <div className="mt-5 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.25em] text-sky-200">Training Dataset Preview</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">
+                          These are synthetic waveform samples that will be used to train the neural network. Each class (AM, FM, PM) gets {trainingSamplesPerClass} randomized samples of {SIGNAL_LENGTH} points.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-xs text-slate-300">
+                        Total samples: {trainingSamplesPerClass * 3}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                      {trainingPreviewData.map((preview) => (
+                        <div key={preview.className} className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{preview.className} Sample</p>
+                          <div className="mt-2 h-[120px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={preview.data} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                                <Line
+                                  type="monotone"
+                                  dataKey="value"
+                                  stroke={
+                                    preview.className === 'AM' ? '#38bdf8' :
+                                    preview.className === 'FM' ? '#34d399' : '#a78bfa'
+                                  }
+                                  strokeWidth={1.5}
+                                  dot={false}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <p className="mt-1 text-center text-[10px] text-slate-500">
+                            {preview.data.length} points · Label {preview.classIndex}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="mt-5 rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4">
