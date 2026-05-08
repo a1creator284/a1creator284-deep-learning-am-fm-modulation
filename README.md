@@ -8,7 +8,8 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
-| 2026-05-09 | Simulator graphs redesigned — individual charts enlarged (280 px) with axis labels and colored borders; new **Combined Signal View** graph added showing all three signals overlaid with a recharts Legend |
+| 2026-05-09 | Simulator graphs — switched from cramped 3-column grid to full-width stacked layout; each graph now 340 px tall with axis labels, colored borders, larger tick text; combined overlay graph 380 px |
+| 2026-05-09 | Added Combined Signal View overlay graph + Legend; individual graph heights increased to 280 px with axis labels |
 
 ---
 
@@ -313,9 +314,9 @@ Main page for waveform generation and signal control.
 - noise control
 - duration control
 - sample rate control
-- **individual waveform graphs** (message, carrier, modulated) — each 280 px tall with axis labels and colored borders for clarity
-- **combined overlay graph** — all three signals on a shared time axis with a recharts Legend for direct comparison
-- snapshot compare (snapshot also appears in the combined graph)
+- separate waveform graphs — full-width stacked, each 340 px tall with axis labels and colored borders (message, carrier, modulated)
+- combined overlay graph — all three signals on one shared axis with legend (380 px)
+- snapshot compare
 - CSV export
 - session save/load
 - reset actions
