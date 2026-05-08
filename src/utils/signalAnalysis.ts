@@ -185,9 +185,15 @@ export function recoverMessageSignal(
     });
   }
 
-  // Digital modes: recover from I/Q components
-  return points.map((point) => {
-    const recovered = (point.iComponent ?? 0) * params.messageAmplitude;
+  // PM recovery: phase deviation is proportional to message
+  const recoveredPhase = points.map((point) => {
+    const instantaneousPhase = point.instantaneousPhase ?? 0;
+    return (instantaneousPhase / Math.max(params.frequencyDeviation, 1e-6)) * params.messageAmplitude;
+  });
+  const smoothedPhase = movingAverage(recoveredPhase, Math.max(3, Math.round(points.length / 26)));
+
+  return points.map((point, index) => {
+    const recovered = smoothedPhase[index] ?? 0;
     return {
       time: point.time,
       message: point.message,
@@ -275,17 +281,10 @@ export function buildWavBlob(samples: Float32Array, sampleRate: number) {
 export function computeEyeDiagram(
   points: SignalPoint[],
   params: SignalParameters,
-  mode: SignalMode,
+  _mode: SignalMode,
 ): EyeDiagramResult {
   // Determine symbol period
-  const isDigital = mode === "BPSK" || mode === "QPSK" || mode === "QAM";
-  const symbolRate = isDigital
-    ? mode === "BPSK"
-      ? (params.messageFrequency > 0 ? params.messageFrequency : 5_000)
-      : (params.messageFrequency > 0 ? params.messageFrequency / 2 : 2_500)
-    : params.messageFrequency > 0
-      ? params.messageFrequency
-      : 5_000;
+  const symbolRate = params.messageFrequency > 0 ? params.messageFrequency : 5_000;
 
   const symbolPeriod = 1 / symbolRate;
   const samplesPerSymbol = Math.max(4, Math.round(params.sampleRate / symbolRate));
@@ -317,29 +316,9 @@ export function computeEyeDiagram(
 export function computeConstellationPoints(
   points: SignalPoint[],
   params: SignalParameters,
-  mode: SignalMode,
+  _mode: SignalMode,
 ): ConstellationPoint[] {
-  const isDigital = mode === "BPSK" || mode === "QPSK" || mode === "QAM";
-
-  if (isDigital) {
-    // Use the I/Q components stored in the signal points, sampled once per symbol
-    const constellation: ConstellationPoint[] = [];
-    let lastSymbol = -1;
-
-    for (const point of points) {
-      if (point.symbolIndex !== undefined && point.symbolIndex !== lastSymbol) {
-        constellation.push({
-          i: point.iComponent ?? 0,
-          q: point.qComponent ?? 0,
-        });
-        lastSymbol = point.symbolIndex;
-      }
-    }
-
-    return constellation;
-  }
-
-  // For AM/FM: coherent demodulation to extract I/Q
+  // For AM/FM/PM: coherent demodulation to extract I/Q
   const TWO_PI = 2 * Math.PI;
   const dt = 1 / params.sampleRate;
   const constellation: ConstellationPoint[] = [];
@@ -366,20 +345,6 @@ export function computeConstellationPoints(
 
 /* ── BER Calculator ───────────────────────────────────────────────── */
 
-/** Approximate complementary error function (erfc) */
-function erfcApprox(x: number): number {
-  // Abramowitz & Stegun approximation
-  const t = 1 / (1 + 0.3275911 * Math.abs(x));
-  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
-  const result = poly * Math.exp(-x * x);
-  return x >= 0 ? result : 2 - result;
-}
-
-/** Q-function: Q(x) = 0.5 * erfc(x / sqrt(2)) */
-function qFunction(x: number): number {
-  return 0.5 * erfcApprox(x / Math.SQRT2);
-}
-
 export function computeBER(
   points: SignalPoint[],
   params: SignalParameters,
@@ -395,16 +360,6 @@ export function computeBER(
   // Theoretical BER
   let theoretical: number;
   switch (mode) {
-    case "BPSK":
-      theoretical = qFunction(Math.sqrt(2 * snrLinear));
-      break;
-    case "QPSK":
-      theoretical = qFunction(Math.sqrt(snrLinear)); // same Eb/No as BPSK per bit
-      break;
-    case "QAM":
-      // 4-QAM ≈ QPSK theoretically
-      theoretical = qFunction(Math.sqrt(snrLinear));
-      break;
     case "AM":
       // Empirical approximation for AM demodulation error rate
       theoretical = Math.min(0.5, 0.5 * Math.exp(-snrLinear * 0.15));
@@ -413,42 +368,28 @@ export function computeBER(
       // FM has a threshold effect; very low BER above threshold
       theoretical = snrDb > 10 ? Math.min(0.5, 1e-4 * Math.exp(-snrDb * 0.2)) : Math.min(0.5, 0.3 * Math.exp(-snrDb * 0.05));
       break;
+    case "PM":
+      // PM BER approximation similar to FM threshold behavior
+      theoretical = snrDb > 10 ? Math.min(0.5, 1e-4 * Math.exp(-snrDb * 0.18)) : Math.min(0.5, 0.25 * Math.exp(-snrDb * 0.04));
+      break;
     default:
       theoretical = 0.5;
   }
 
-  // Simulated BER — compare sign/threshold of modulated vs expected
+  // Simulated BER — compare recovered envelope with original message
   let errors = 0;
   let total = 0;
-  const isDigital = mode === "BPSK" || mode === "QPSK" || mode === "QAM";
 
-  if (isDigital && points.length > 0) {
-    let lastSymbol = -1;
-    for (const point of points) {
-      if (point.symbolIndex !== undefined && point.symbolIndex !== lastSymbol) {
-        // For BPSK: check if sign of I-component matches reconstructed
-        const expectedI = point.iComponent ?? 0;
-        // Simple: compare expected sign with noisy sample at decision point
-        const noisyI = point.modulated / Math.max(params.carrierAmplitude, 0.001);
-        if (Math.sign(expectedI) !== Math.sign(noisyI) && Math.abs(noisyI) > 0.01) {
-          errors++;
-        }
-        total++;
-        lastSymbol = point.symbolIndex;
-      }
-    }
-  } else {
-    // For AM/FM: compare recovered envelope with original message
-    const recovered = points.map((p) => Math.abs(p.modulated));
-    const windowSize = Math.max(5, Math.round(points.length / 18));
-    const smoothed = movingAverage(recovered, windowSize);
+  // For AM/FM/PM: compare recovered envelope with original message
+  const recovered = points.map((p) => Math.abs(p.modulated));
+  const windowSize = Math.max(5, Math.round(points.length / 18));
+  const smoothed = movingAverage(recovered, windowSize);
 
-    for (let i = 0; i < points.length; i++) {
-      const expected = Math.sign(points[i].message);
-      const got = Math.sign((smoothed[i] ?? 0) - params.carrierAmplitude);
-      if (expected !== 0 && got !== 0 && expected !== got) errors++;
-      if (expected !== 0) total++;
-    }
+  for (let i = 0; i < points.length; i++) {
+    const expected = Math.sign(points[i].message);
+    const got = Math.sign((smoothed[i] ?? 0) - params.carrierAmplitude);
+    if (expected !== 0 && got !== 0 && expected !== got) errors++;
+    if (expected !== 0) total++;
   }
 
   const simulated = total > 0 ? errors / total : 0;

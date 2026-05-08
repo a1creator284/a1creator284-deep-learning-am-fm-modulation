@@ -17,7 +17,7 @@ export type MiniModel = {
 
 export type TrainingSample = {
   features: number[];
-  label: 0 | 1;
+  label: 0 | 1 | 2;
 };
 
 export type EpochStats = {
@@ -64,11 +64,11 @@ export function createMiniModel(inputSize = 128, hiddenSize = 24): MiniModel {
   return {
     inputSize,
     hiddenSize,
-    outputSize: 2,
+    outputSize: 3,
     w1: createMatrix(hiddenSize, inputSize),
     b1: createVector(hiddenSize),
-    w2: createMatrix(2, hiddenSize),
-    b2: createVector(2),
+    w2: createMatrix(3, hiddenSize),
+    b2: createVector(3),
   };
 }
 
@@ -79,13 +79,13 @@ export function buildSyntheticDataset(
 ): TrainingSample[] {
   const dataset: TrainingSample[] = [];
 
-  (['AM', 'FM'] as SignalMode[]).forEach((signalMode, classIndex) => {
+  (['AM', 'FM', 'PM'] as SignalMode[]).forEach((signalMode, classIndex) => {
     for (let index = 0; index < samplesPerClass; index += 1) {
       const randomizedParams = createRandomSignalParameters(signalMode, baseParams);
       const features = sampleSignal(signalMode, randomizedParams, sampleLength);
       dataset.push({
         features,
-        label: classIndex as 0 | 1,
+        label: classIndex as 0 | 1 | 2,
       });
     }
   });

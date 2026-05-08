@@ -54,7 +54,7 @@ class PredictRequest(BaseModel):
 
 
 class PredictGeneratedRequest(BaseModel):
-    mode: str = Field(default="AM", pattern="^(AM|FM)$")
+    mode: str = Field(default="AM", pattern="^(AM|FM|PM)$")
     sample_length: int = Field(default=256, ge=64, le=4096)
     sample_rate: int = Field(default=1_000_000, ge=100, le=2_000_000)
     params: SignalGenerationParams = Field(default_factory=SignalGenerationParams)
@@ -150,7 +150,7 @@ class ReportSection(BaseModel):
 
 
 class ReportSummaryRequest(BaseModel):
-    mode: str = Field(default="AM", pattern="^(AM|FM)$")
+    mode: str = Field(default="AM", pattern="^(AM|FM|PM)$")
     signal_source: str = Field(default="analog", pattern="^(analog|text)$")
     text_message: str | None = Field(default=None, max_length=5000)
     params: SignalGenerationParams = Field(default_factory=SignalGenerationParams)

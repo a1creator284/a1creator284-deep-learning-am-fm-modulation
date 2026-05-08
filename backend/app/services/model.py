@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-CLASS_NAMES = ["AM", "FM"]
+CLASS_NAMES = ["AM", "FM", "PM"]
 
 
 class ModulationClassifier(nn.Module):

@@ -1,4 +1,4 @@
-export type SignalMode = "AM" | "FM" | "BPSK" | "QPSK" | "QAM";
+export type SignalMode = "AM" | "FM" | "PM";
 
 export type NoiseType = "AWGN" | "Rayleigh" | "Impulse";
 
@@ -8,12 +8,7 @@ export interface SignalPoint {
   carrier: number;
   modulated: number;
   instantaneousFrequency?: number;
-  /** I-component for digital modes */
-  iComponent?: number;
-  /** Q-component for digital modes */
-  qComponent?: number;
-  /** Symbol index for digital modes */
-  symbolIndex?: number;
+  instantaneousPhase?: number;
 }
 
 export interface SignalParameters {
@@ -88,16 +83,6 @@ const addTypedNoise = (value: number, noiseLevel: number, noiseType: NoiseType):
     default:
       return value + boxMullerGaussian() * noiseLevel;
   }
-};
-
-/* ── Seeded PRNG for reproducible bit generation ──────────────────── */
-
-const createSeededRng = (seed: number) => {
-  let state = seed;
-  return () => {
-    state = (state * 1664525 + 1013904223) & 0xffffffff;
-    return (state >>> 0) / 0xffffffff;
-  };
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -185,29 +170,19 @@ export const generateFMSignal = (params: SignalParameters): SignalPoint[] => {
   return points;
 };
 
-/* ── BPSK generator ───────────────────────────────────────────────── */
+/* ── PM generator ────────────────────────────────────────────────── */
 
-export const generateBPSKSignal = (params: SignalParameters): SignalPoint[] => {
+export const generatePMSignal = (params: SignalParameters): SignalPoint[] => {
   const points: SignalPoint[] = [];
   const dt = 1 / params.sampleRate;
-  const totalSamples = Math.ceil(params.duration / dt);
-  const symbolRate = params.messageFrequency > 0 ? params.messageFrequency : 5_000;
-  const samplesPerSymbol = Math.max(4, Math.round(params.sampleRate / symbolRate));
-  const rng = createSeededRng(42);
+  const kp = params.frequencyDeviation / Math.max(params.messageAmplitude, 0.0001);
 
-  // Generate enough bits
-  const numSymbols = Math.ceil(totalSamples / samplesPerSymbol) + 1;
-  const bits = Array.from({ length: numSymbols }, () => (rng() > 0.5 ? 1 : 0));
-
-  let sampleIdx = 0;
   for (let t = 0; t <= params.duration; t += dt) {
-    const symbolIdx = Math.floor(sampleIdx / samplesPerSymbol);
-    const bit = bits[symbolIdx] ?? 0;
-    const phase = bit === 1 ? 0 : Math.PI; // BPSK: 0 → 0°, 1 → 180°
-    const message = bit === 1 ? params.messageAmplitude : -params.messageAmplitude;
+    const message = params.messageAmplitude * Math.cos(TWO_PI * params.messageFrequency * t + params.phase);
     const carrier = params.carrierAmplitude * Math.cos(TWO_PI * params.carrierFrequency * t);
+    const phaseDeviation = kp * message;
     const modulated = addTypedNoise(
-      params.carrierAmplitude * Math.cos(TWO_PI * params.carrierFrequency * t + phase + params.phase),
+      params.carrierAmplitude * Math.cos(TWO_PI * params.carrierFrequency * t + phaseDeviation + params.phase),
       params.noiseLevel,
       params.noiseType,
     );
@@ -217,111 +192,8 @@ export const generateBPSKSignal = (params: SignalParameters): SignalPoint[] => {
       message,
       carrier,
       modulated,
-      iComponent: Math.cos(phase),
-      qComponent: Math.sin(phase),
-      symbolIndex: symbolIdx,
+      instantaneousPhase: phaseDeviation,
     });
-    sampleIdx++;
-  }
-
-  return points;
-};
-
-/* ── QPSK generator ───────────────────────────────────────────────── */
-
-export const generateQPSKSignal = (params: SignalParameters): SignalPoint[] => {
-  const points: SignalPoint[] = [];
-  const dt = 1 / params.sampleRate;
-  const totalSamples = Math.ceil(params.duration / dt);
-  const symbolRate = params.messageFrequency > 0 ? params.messageFrequency / 2 : 2_500;
-  const samplesPerSymbol = Math.max(4, Math.round(params.sampleRate / symbolRate));
-  const rng = createSeededRng(73);
-
-  const numSymbols = Math.ceil(totalSamples / samplesPerSymbol) + 1;
-  // QPSK: 4 phase states = π/4, 3π/4, 5π/4, 7π/4
-  const phaseMap = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
-  const symbols = Array.from({ length: numSymbols }, () => Math.floor(rng() * 4));
-
-  let sampleIdx = 0;
-  for (let t = 0; t <= params.duration; t += dt) {
-    const symbolIdx = Math.floor(sampleIdx / samplesPerSymbol);
-    const sym = symbols[symbolIdx] ?? 0;
-    const symPhase = phaseMap[sym];
-    const iVal = Math.cos(symPhase);
-    const qVal = Math.sin(symPhase);
-    const message = iVal * params.messageAmplitude;
-    const carrier = params.carrierAmplitude * Math.cos(TWO_PI * params.carrierFrequency * t);
-    const modulated = addTypedNoise(
-      params.carrierAmplitude * Math.cos(TWO_PI * params.carrierFrequency * t + symPhase + params.phase),
-      params.noiseLevel,
-      params.noiseType,
-    );
-
-    points.push({
-      time: Number(t.toFixed(8)),
-      message,
-      carrier,
-      modulated,
-      iComponent: iVal,
-      qComponent: qVal,
-      symbolIndex: symbolIdx,
-    });
-    sampleIdx++;
-  }
-
-  return points;
-};
-
-/* ── 4-QAM generator ─────────────────────────────────────────────── */
-
-export const generateQAMSignal = (params: SignalParameters): SignalPoint[] => {
-  const points: SignalPoint[] = [];
-  const dt = 1 / params.sampleRate;
-  const totalSamples = Math.ceil(params.duration / dt);
-  const symbolRate = params.messageFrequency > 0 ? params.messageFrequency / 2 : 2_500;
-  const samplesPerSymbol = Math.max(4, Math.round(params.sampleRate / symbolRate));
-  const rng = createSeededRng(101);
-
-  const numSymbols = Math.ceil(totalSamples / samplesPerSymbol) + 1;
-  // 4-QAM constellation: (±1, ±1) / sqrt(2)
-  const qamMap: [number, number][] = [
-    [1, 1],
-    [1, -1],
-    [-1, 1],
-    [-1, -1],
-  ];
-  const symbols = Array.from({ length: numSymbols }, () => Math.floor(rng() * 4));
-
-  let sampleIdx = 0;
-  for (let t = 0; t <= params.duration; t += dt) {
-    const symbolIdx = Math.floor(sampleIdx / samplesPerSymbol);
-    const sym = symbols[symbolIdx] ?? 0;
-    const [iVal, qVal] = qamMap[sym];
-    const normFactor = 1 / Math.SQRT2;
-    const iNorm = iVal * normFactor;
-    const qNorm = qVal * normFactor;
-    const message = iNorm * params.messageAmplitude;
-    const carrier = params.carrierAmplitude * Math.cos(TWO_PI * params.carrierFrequency * t);
-
-    // QAM: I * cos(wt) - Q * sin(wt)
-    const modulated = addTypedNoise(
-      params.carrierAmplitude *
-        (iNorm * Math.cos(TWO_PI * params.carrierFrequency * t + params.phase) -
-          qNorm * Math.sin(TWO_PI * params.carrierFrequency * t + params.phase)),
-      params.noiseLevel,
-      params.noiseType,
-    );
-
-    points.push({
-      time: Number(t.toFixed(8)),
-      message,
-      carrier,
-      modulated,
-      iComponent: iNorm,
-      qComponent: qNorm,
-      symbolIndex: symbolIdx,
-    });
-    sampleIdx++;
   }
 
   return points;
@@ -335,12 +207,8 @@ export const generateSignal = (mode: SignalMode, params: SignalParameters) => {
       return generateAMSignal(params);
     case "FM":
       return generateFMSignal(params);
-    case "BPSK":
-      return generateBPSKSignal(params);
-    case "QPSK":
-      return generateQPSKSignal(params);
-    case "QAM":
-      return generateQAMSignal(params);
+    case "PM":
+      return generatePMSignal(params);
     default:
       return generateAMSignal(params);
   }

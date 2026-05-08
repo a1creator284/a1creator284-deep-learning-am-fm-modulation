@@ -1,6 +1,6 @@
 # Deep Learning Signal Modulation Lab
 
-A complete **college project + portfolio project** for learning and demonstrating **AM modulation, FM modulation, signal analysis, and deep learning-based modulation understanding**.
+A complete **college project + portfolio project** for learning and demonstrating **AM modulation, FM modulation, PM modulation, signal analysis, and deep learning-based modulation understanding**.
 
 This project combines:
 - a modern **React + Vite + Tailwind CSS** frontend
@@ -20,7 +20,7 @@ The aim of this project is to show how a communication system works from end to 
 
 1. create a **message signal**
 2. create a **carrier signal**
-3. modulate the carrier using **AM** or **FM**
+3. modulate the carrier using **AM**, **FM**, or **PM**
 4. inspect the waveform in time domain
 5. inspect the spectrum in frequency domain
 6. simulate channel noise
@@ -242,7 +242,7 @@ This gives a clear explanation:
 # 5. What Happens If Deep Learning Is Not Used?
 
 If deep learning is not used:
-- the project still demonstrates AM/FM modulation correctly
+- the project still demonstrates AM/FM/PM modulation correctly
 - waveform generation and graphs still work
 - traditional understanding can still be shown
 - but the AI improvement story is missing
@@ -269,7 +269,7 @@ After deep learning is trained/enabled:
 ### Practical presentation message
 You can explain it like this:
 
-> Without deep learning, the system uses traditional interpretation and accuracy remains lower. After training the model, the dashboard shows improved understanding of AM/FM waveform patterns, which increases reliability.
+> Without deep learning, the system uses traditional interpretation and accuracy remains lower. After training the model, the dashboard shows improved understanding of AM/FM/PM waveform patterns, which increases reliability.
 
 ---
 
@@ -281,7 +281,7 @@ The frontend is intentionally split into multiple clean pages so the UI does not
 Main page for waveform generation and signal control.
 
 ### Features
-- AM / FM mode selection
+- AM / FM / PM mode selection
 - message amplitude control
 - message frequency control
 - carrier amplitude control
@@ -314,7 +314,7 @@ Used for text-driven signal modulation.
 - use text as the message signal
 - speak original text
 - play message signal audio
-- play AM/FM output audio
+- play AM/FM/PM output audio
 - stop audio
 - download message WAV
 - download modulated WAV
@@ -353,7 +353,7 @@ Used for clean end-to-end project presentation.
 Used for training and analysis.
 
 ### Features
-- train AM/FM mini model in browser
+- train AM/FM/PM mini model in browser
 - predict current waveform
 - traditional vs deep learning comparison
 - DL ON/OFF toggle
@@ -382,11 +382,12 @@ Used to connect with the real FastAPI backend.
 
 # 8. Theory Support
 
-The project also contains a detailed **Theory about AM/FM** modal.
+The project also contains a detailed **Theory about AM/FM/PM** modal.
 
 ### It includes
 - AM theory
 - FM theory
+- PM theory
 - formulas
 - deep learning explanation
 - notes download
@@ -583,7 +584,7 @@ npm run dev
 # 14. Backend Features Explained
 
 ## `/train`
-Generates synthetic AM/FM training data and trains the backend classifier.
+Generates synthetic AM/FM/PM training data and trains the backend classifier.
 
 ## `/predict`
 Predicts modulation type from a raw waveform array.
@@ -819,7 +820,7 @@ npx playwright install
 
 This project can be extended further with:
 - real demodulation audio reconstruction
-- more modulation schemes (ASK, FSK, PSK, QAM)
+- more modulation schemes (ASK, FSK, PSK)
 - confusion matrix
 - training loss/accuracy graph over epochs
 - dataset upload for backend training
@@ -832,7 +833,7 @@ This project can be extended further with:
 # 25. Final Conclusion
 
 This project is not only a waveform visualizer. It is a complete educational lab that demonstrates:
-- AM and FM modulation
+- AM, FM, and PM modulation
 - signal parameter tuning
 - text-to-signal conversion
 - audio playback

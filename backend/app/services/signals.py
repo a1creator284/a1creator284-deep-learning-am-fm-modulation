@@ -6,7 +6,7 @@ from typing import Literal
 
 import numpy as np
 
-SignalMode = Literal["AM", "FM"]
+SignalMode = Literal["AM", "FM", "PM"]
 
 
 @dataclass(frozen=True)
@@ -54,9 +54,13 @@ def generate_signal(mode: SignalMode, params: SignalParams, sample_length: int, 
         modulation_index = params.message_amplitude / max(params.carrier_amplitude, 1e-5)
         envelope = 1.0 + modulation_index * np.cos(2 * math.pi * params.message_frequency * time + params.phase)
         modulated = params.carrier_amplitude * envelope * np.cos(2 * math.pi * params.carrier_frequency * time)
-    else:
+    elif mode == "FM":
         beta = params.frequency_deviation / max(params.message_frequency, 1e-5)
         phase_term = beta * np.sin(2 * math.pi * params.message_frequency * time + params.phase)
+        modulated = params.carrier_amplitude * np.cos(2 * math.pi * params.carrier_frequency * time + phase_term)
+    else:  # PM
+        kp = params.frequency_deviation / max(params.message_amplitude, 1e-5)
+        phase_term = kp * params.message_amplitude * np.cos(2 * math.pi * params.message_frequency * time + params.phase)
         modulated = params.carrier_amplitude * np.cos(2 * math.pi * params.carrier_frequency * time + phase_term)
 
     if params.noise_level > 0:
@@ -76,14 +80,14 @@ def create_random_params(mode: SignalMode, rng: np.random.Generator, sample_rate
         message_min = 100.0
         message_max = min(10_000.0, carrier_max / 6.0)
         deviation_min = 500.0
-        deviation_max = min(20_000.0 if mode == "FM" else 10_000.0, carrier_max / 3.0)
+        deviation_max = min(20_000.0 if mode in ("FM", "PM") else 10_000.0, carrier_max / 3.0)
     else:
         carrier_min = 80.0
         carrier_max = min(max(220.0, sample_rate * 0.35), 2_000.0)
         message_min = 4.0
         message_max = min(120.0, carrier_max / 8.0)
         deviation_min = 8.0
-        deviation_max = min(80.0 if mode == "FM" else 35.0, carrier_max / 4.0)
+        deviation_max = min(80.0 if mode in ("FM", "PM") else 35.0, carrier_max / 4.0)
 
     carrier_max = max(carrier_min + 1.0, carrier_max)
     message_max = max(message_min + 1.0, message_max)

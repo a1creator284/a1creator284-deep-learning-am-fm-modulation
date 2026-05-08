@@ -118,6 +118,7 @@ type PredictionState = {
   confidence: number;
   am: number;
   fm: number;
+  pm: number;
 } | null;
 
 type SavedSnapshot = {
@@ -179,40 +180,16 @@ const PRESET_BY_MODE: Record<SignalMode, SignalParameters> = {
     noiseLevel: 0.02,
     noiseType: "AWGN",
   },
-  BPSK: {
+  PM: {
     ...DEFAULT_SIGNAL_PARAMETERS,
     messageAmplitude: 1,
-    messageFrequency: 5_000,
-    carrierAmplitude: 2,
-    carrierFrequency: 50_000,
-    frequencyDeviation: 5_000,
-    duration: 0.002,
-    sampleRate: 500_000,
-    noiseLevel: 0.05,
-    noiseType: "AWGN",
-  },
-  QPSK: {
-    ...DEFAULT_SIGNAL_PARAMETERS,
-    messageAmplitude: 1,
-    messageFrequency: 5_000,
-    carrierAmplitude: 2,
-    carrierFrequency: 50_000,
-    frequencyDeviation: 5_000,
-    duration: 0.002,
-    sampleRate: 500_000,
-    noiseLevel: 0.05,
-    noiseType: "AWGN",
-  },
-  QAM: {
-    ...DEFAULT_SIGNAL_PARAMETERS,
-    messageAmplitude: 1,
-    messageFrequency: 5_000,
-    carrierAmplitude: 2,
-    carrierFrequency: 50_000,
-    frequencyDeviation: 5_000,
-    duration: 0.002,
-    sampleRate: 500_000,
-    noiseLevel: 0.05,
+    messageFrequency: 10_000,
+    carrierAmplitude: 2.4,
+    carrierFrequency: 100_000,
+    frequencyDeviation: 1.2,
+    duration: 0.0012,
+    sampleRate: 1_000_000,
+    noiseLevel: 0.02,
     noiseType: "AWGN",
   },
 };
@@ -221,12 +198,12 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
   simulator: {
     title: "How to use the Simulator page",
     description:
-      "Use this page for the main experiment. Here you choose AM or FM, tune signal parameters, and inspect the waveform response in real time.",
+      "Use this page for the main experiment. Here you choose AM, FM, or PM, tune signal parameters, and inspect the waveform response in real time.",
     sections: [
       {
         title: "Quick start",
         steps: [
-          "Choose AM or FM from the mode switch at the top of the Signal Controls panel.",
+          "Choose AM, FM, or PM from the mode switch at the top of the Signal Controls panel.",
           "Use the preset buttons first if you want a stable starting point before changing values manually.",
           "Adjust message amplitude, message frequency, carrier amplitude, and carrier frequency to create your own test signal.",
           "Watch the graph on the right to see how the message, carrier, and modulated wave change instantly.",
@@ -256,7 +233,7 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
         steps: [
           "Start with AM preset and explain the formula card under the graph.",
           "Increase message amplitude and noise to show how the waveform changes.",
-          "Then switch to FM and compare how the modulation behavior differs.",
+          "Then switch to FM and PM and compare how the modulation behavior differs.",
           "Move to Audio Lab or AI Analysis using the page buttons when you want to show advanced features.",
         ],
       },
@@ -265,7 +242,7 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
   audio: {
     title: "How to use the Audio Lab page",
     description:
-      "This page converts text into binary bits, uses those bits as the message signal, and lets the user listen to the original text, the message signal, and the final AM/FM output.",
+      "This page converts text into binary bits, uses those bits as the message signal, and lets the user listen to the original text, the message signal, and the final AM/FM/PM output.",
     sections: [
       {
         title: "Text message workflow",
@@ -281,7 +258,7 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
         steps: [
           "Speak original text uses browser speech synthesis to read the plain text message.",
           "Play message signal plays the bit-driven message waveform before modulation.",
-          "Play AM output or Play FM output plays the final modulated signal after the carrier is applied.",
+          "Play AM output, Play FM output, or Play PM output plays the final modulated signal after the carrier is applied.",
           "Stop audio stops current playback immediately if you want to replay another sound.",
         ],
       },
@@ -289,7 +266,7 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
         title: "Export options",
         steps: [
           "Download message WAV saves the message signal audio to your computer.",
-          "Download AM WAV or FM WAV saves the modulated output as a WAV file.",
+          "Download AM WAV, FM WAV, or PM WAV saves the modulated output as a WAV file.",
           "Use these files in your report or demo to prove the signal path from text to modulation.",
         ],
       },
@@ -311,7 +288,7 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
       {
         title: "Run the full flow",
         steps: [
-          "Open this page after setting your AM or FM parameters on the Simulator page.",
+          "Open this page after setting your AM, FM, or PM parameters on the Simulator page.",
           "Click Run full communication flow to move through message preparation, carrier setup, modulation, channel condition, demodulation preview, AI classification, and final report generation.",
           "If the FastAPI backend model is not ready yet, the flow can train the backend first and use the browser model only as a fallback.",
           "After the flow is complete, review the step timeline to explain the complete communication system in a clean order.",
@@ -353,10 +330,10 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
       {
         title: "Training and prediction",
         steps: [
-          "Click Train AM/FM Model to train the real FastAPI + PyTorch backend when it is available; if the backend is offline, the browser fallback model is used.",
+          "Click Train AM/FM/PM Model to train the real FastAPI + PyTorch backend when it is available; if the backend is offline, the browser fallback model is used.",
           "Watch the progress bar, accuracy tiles, and backend history chart as training completes.",
           "After training, click Predict Current Signal to classify the waveform you are currently viewing using the backend model when available.",
-          "The prediction card shows AM/FM confidence values and the winning label.",
+          "The prediction card shows AM/FM/PM confidence values and the winning label.",
         ],
       },
       {
@@ -625,30 +602,24 @@ function App() {
   const eyeDiagramData = useMemo(() => computeEyeDiagram(activeSignalData, params, mode), [activeSignalData, params, mode]);
   const constellationData = useMemo(() => computeConstellationPoints(activeSignalData, params, mode), [activeSignalData, params, mode]);
   const berResult = useMemo(() => computeBER(activeSignalData, params, mode, params.noiseLevel), [activeSignalData, params, mode]);
-  const isDigitalMode = mode === "BPSK" || mode === "QPSK" || mode === "QAM";
 
   const modulationIndex = params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001);
   const bandwidth = mode === "AM" ? 2 * params.messageFrequency
     : mode === "FM" ? 2 * (params.frequencyDeviation + params.messageFrequency)
-    : mode === "BPSK" ? 2 * (params.messageFrequency > 0 ? params.messageFrequency : 5_000)
-    : 2 * (params.messageFrequency > 0 ? params.messageFrequency : 5_000); // QPSK/QAM similar
+    : 2 * (params.frequencyDeviation + params.messageFrequency); // PM uses similar bandwidth to FM
   const isOverModulated = modulationIndex > 1;
 
   const FORMULA_MAP: Record<SignalMode, string> = {
     AM: "s(t) = Ac [1 + μ cos(2π fm t)] cos(2π fc t)",
     FM: "s(t) = Ac cos(2π fc t + β sin(2π fm t))",
-    BPSK: "s(t) = Ac · d(t) · cos(2π fc t)  where d(t) ∈ {+1, −1}",
-    QPSK: "s(t) = I·cos(2π fc t) − Q·sin(2π fc t)  where (I,Q) ∈ {±1}",
-    QAM: "s(t) = I·cos(2π fc t) − Q·sin(2π fc t)  4-QAM constellation",
+    PM: "s(t) = Ac cos(2π fc t + kp·m(t))  where m(t) = Am cos(2π fm t)",
   };
   const formula = FORMULA_MAP[mode];
 
   const DESCRIPTION_MAP: Record<SignalMode, string> = {
     AM: "AM changes the amplitude of the carrier while the carrier frequency stays fixed.",
     FM: "FM changes the instantaneous frequency of the carrier while the amplitude remains almost constant.",
-    BPSK: "BPSK maps binary data to two carrier phase states (0° and 180°), providing robust digital transmission.",
-    QPSK: "QPSK maps symbol pairs to four phase states, doubling spectral efficiency compared to BPSK.",
-    QAM: "4-QAM maps 2-bit symbols onto a grid of amplitude and phase states for efficient data transmission.",
+    PM: "PM changes the instantaneous phase of the carrier proportionally to the message signal amplitude.",
   };
   const formulaDescription = signalSource === "text"
     ? `Text mode is active. Each character is converted into binary bits, and those bits are used as the message signal for ${mode} modulation.`
@@ -1454,8 +1425,8 @@ function App() {
                   <FeatureButton label="Help for this page" icon={<CircleHelp size={15} />} tone="violet" onClick={() => setHelpPage("simulator")} />
                 </div>
 
-                <div className="mt-5 grid grid-cols-5 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1">
-                  {(["AM", "FM", "BPSK", "QPSK", "QAM"] as SignalMode[]).map((signalMode) => (
+                <div className="mt-5 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1">
+                  {(["AM", "FM", "PM"] as SignalMode[]).map((signalMode) => (
                     <button
                       key={signalMode}
                       type="button"
@@ -2413,7 +2384,7 @@ function App() {
                     className="rounded-3xl border border-violet-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
                   >
                     <p className="text-base font-semibold text-violet-300">Eye Diagram</p>
-                    <p className="mt-2 text-sm text-slate-400">Overlaid traces folded at the symbol period — best for digital modes (BPSK/QPSK/QAM).</p>
+                    <p className="mt-2 text-sm text-slate-400">Overlaid traces folded at the message period for visualizing signal quality.</p>
                     <div className="mt-4 h-[300px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>

@@ -27,7 +27,7 @@ def build_synthetic_arrays(request: TrainRequest) -> tuple[np.ndarray, np.ndarra
     features: list[np.ndarray] = []
     labels: list[int] = []
 
-    for label, mode in enumerate(("AM", "FM")):
+    for label, mode in enumerate(("AM", "FM", "PM")):
         for _ in range(request.samples_per_class):
             params = create_random_params(mode, rng, request.sample_rate)
             waveform = generate_signal(mode, params, request.sample_length, request.sample_rate)
