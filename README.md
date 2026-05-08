@@ -277,7 +277,19 @@ You can explain it like this:
 
 The frontend is intentionally split into multiple clean pages so the UI does not become messy.
 
-## 7.1 Simulator
+## 7.1 Landing Page
+First screen shown when opening the app.
+
+### Features
+- animated title with gradient text
+- project stats badge (85%+ accuracy, 3x faster inference, 3 modulation types)
+- "Enter Laboratory" CTA to start the simulator
+- "Explore Features" CTA
+- clean, minimalist design with Framer Motion transitions
+
+---
+
+## 7.2 Simulator
 Main page for waveform generation and signal control.
 
 ### Features
@@ -291,8 +303,7 @@ Main page for waveform generation and signal control.
 - noise control
 - duration control
 - sample rate control
-- waveform graph
-- show/hide message, carrier, modulated signal
+- separate waveform graphs (message, carrier, modulated)
 - snapshot compare
 - CSV export
 - session save/load
@@ -305,7 +316,7 @@ Main page for waveform generation and signal control.
 
 ---
 
-## 7.2 Audio Lab
+## 7.3 Audio Lab
 Used for text-driven signal modulation.
 
 ### Features
@@ -324,7 +335,7 @@ Used for text-driven signal modulation.
 
 ---
 
-## 7.3 Flow & Report
+## 7.4 Flow & Report
 Used for clean end-to-end project presentation.
 
 ### Features
@@ -349,7 +360,7 @@ Used for clean end-to-end project presentation.
 
 ---
 
-## 7.4 AI Analysis
+## 7.5 AI Analysis
 Used for training and analysis.
 
 ### Features

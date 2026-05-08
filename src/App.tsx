@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   ArrowLeft,
+  ArrowRight,
   BookOpen,
   Bookmark,
   BrainCircuit,
@@ -11,7 +12,6 @@ import {
   Cpu,
   Download,
   Eye,
-  EyeOff,
   FileText,
   Gauge,
   CircleHelp,
@@ -454,7 +454,7 @@ function App() {
   const [backendApiBaseUrl, setBackendApiBaseUrl] = useState(getBackendApiBaseUrl());
   const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
   const [endpointSmokeReport, setEndpointSmokeReport] = useState<BackendEndpointSmokeReport | null>(null);
-  const [trainingStatus, setTrainingStatus] = useState("Ready to train the AM/FM model.");
+  const [trainingStatus, setTrainingStatus] = useState("Ready to train the AM/FM/PM model.");
   const [trainingProgress, setTrainingProgress] = useState(0);
   const [trainingLoss, setTrainingLoss] = useState<number | null>(null);
   const [trainingAccuracy, setTrainingAccuracy] = useState<number | null>(null);
@@ -467,6 +467,7 @@ function App() {
   const [backendTrainingHistory, setBackendTrainingHistory] = useState<BackendTrainHistoryPoint[]>([]);
   const [prediction, setPrediction] = useState<PredictionState>(null);
   const [snapshot, setSnapshot] = useState<SavedSnapshot>(null);
+  const [hasEnteredLab, setHasEnteredLab] = useState(false);
   const [showMessage, setShowMessage] = useState(true);
   const [showCarrier, setShowCarrier] = useState(true);
   const [showModulated, setShowModulated] = useState(true);
@@ -1264,6 +1265,71 @@ function App() {
     }
   };
 
+  if (!hasEnteredLab) {
+    return (
+      <div className="min-h-screen overflow-hidden bg-[#020617] text-slate-100">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_26%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.14),_transparent_24%)]" />
+        <div className="relative mx-auto flex min-h-screen max-w-[1600px] flex-col items-center justify-center px-4 text-center md:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="space-y-8"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-sky-300">
+              <BrainCircuit size={14} />
+              Deep Learning Enhanced
+            </div>
+            <div className="space-y-4">
+              <h1 className="text-5xl font-bold tracking-tight text-white md:text-7xl">
+                Signal Modulation
+              </h1>
+              <h2 className="bg-gradient-to-r from-sky-400 via-violet-400 to-emerald-400 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-6xl">
+                Using Deep Learning
+              </h2>
+            </div>
+            <p className="mx-auto max-w-2xl text-base leading-7 text-slate-400 md:text-lg">
+              Experience the future of signal processing. Our AI-powered system achieves <span className="text-emerald-400 font-semibold">85%+ accuracy</span> in modulation classification, outperforming traditional methods by up to <span className="text-violet-400 font-semibold">20%</span>.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-8">
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-emerald-400">85%+</p>
+                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">AI Accuracy</p>
+              </div>
+              <div className="h-8 w-px bg-slate-700" />
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-sky-400">3x</p>
+                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Faster Processing</p>
+              </div>
+              <div className="h-8 w-px bg-slate-700" />
+              <div className="space-y-1">
+                <p className="text-3xl font-bold text-violet-400">3</p>
+                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Modulation Types</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => setHasEnteredLab(true)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-violet-500 px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:shadow-xl hover:shadow-sky-500/30"
+              >
+                Enter Laboratory
+                <ArrowRight size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setHasEnteredLab(true)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/60 px-8 py-4 text-sm font-medium text-slate-300 backdrop-blur transition hover:border-white/20 hover:bg-slate-800/60 hover:text-white"
+              >
+                Explore Features
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen overflow-hidden bg-[#020617] text-slate-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_26%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.14),_transparent_24%)]" />
@@ -1293,7 +1359,7 @@ function App() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="max-w-3xl text-sm leading-6 text-slate-400 md:text-base"
             >
-              Explore AM and FM from one clean dashboard, tune amplitudes and frequencies, compare saved graphs, export waveform data, and demonstrate how deep learning improves signal understanding.
+              Explore AM, FM, and PM from one clean dashboard. Tune amplitudes and frequencies, compare saved graphs, export waveform data, and demonstrate how deep learning improves signal understanding.
             </motion.p>
           </div>
 
@@ -1664,10 +1730,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                    <VisibilityButton label="Message" active={showMessage} onClick={() => setShowMessage((value) => !value)} tone="sky" />
-                    <VisibilityButton label="Carrier" active={showCarrier} onClick={() => setShowCarrier((value) => !value)} tone="emerald" />
-                    <VisibilityButton label="Modulated" active={showModulated} onClick={() => setShowModulated((value) => !value)} tone="violet" />
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <FeatureButton label="Capture graph" icon={<Bookmark size={15} />} tone="amber" onClick={captureSnapshot} />
                     <FeatureButton label="Download CSV" icon={<Download size={15} />} tone="sky" onClick={downloadCurrentCsv} />
                     <FeatureButton label="Open Flow & Report" icon={<FileText size={15} />} tone="violet" onClick={() => setActivePage("flow")} />
@@ -1681,46 +1744,72 @@ function App() {
                     </div>
                   ) : null}
 
-                  {!showMessage && !showCarrier && !showModulated && !snapshot ? (
-                    <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs leading-6 text-red-100">
-                      All waveform layers are hidden. Turn on at least one line button to view the graph.
+                  <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                    {/* Message Signal */}
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-sky-400">Message m(t)</p>
+                      <div className="h-[220px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                            <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
+                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
+                              labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
+                              itemStyle={{ fontSize: 12 }}
+                              labelFormatter={(value) => formatTimeLabel(Number(value))}
+                            />
+                            <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Message m(t)" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
-                  ) : null}
 
-                  <div className="mt-5 h-[430px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
-                        <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
-                        <XAxis
-                          dataKey="time"
-                          stroke="#475569"
-                          tick={{ fill: "#64748b", fontSize: 10 }}
-                          tickFormatter={formatTimeLabel}
-                          label={{ value: "Time", position: "insideBottomRight", offset: -4, fill: "#64748b", fontSize: 12 }}
-                        />
-                        <YAxis stroke="#475569" tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: 12 }}
-                          labelStyle={{ color: "#cbd5e1" }}
-                          itemStyle={{ fontSize: 12 }}
-                          labelFormatter={(value) => formatTimeLabel(Number(value))}
-                        />
-                        {showMessage ? <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Message m(t)" /> : null}
-                        {showCarrier ? <Line type="monotone" dataKey="carrier" stroke="#64748b" strokeWidth={1.5} strokeDasharray="6 6" dot={false} name="Carrier c(t)" /> : null}
-                        {showModulated ? <Line type="monotone" dataKey="modulated" stroke="#34d399" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} /> : null}
-                        {snapshot ? (
-                          <Line
-                            type="monotone"
-                            dataKey="savedModulated"
-                            stroke="#f59e0b"
-                            strokeWidth={1.7}
-                            strokeDasharray="5 5"
-                            dot={false}
-                            name={`Saved ${snapshot.mode} snapshot`}
-                          />
-                        ) : null}
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {/* Carrier Signal */}
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-400">Carrier c(t)</p>
+                      <div className="h-[220px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                            <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
+                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
+                              labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
+                              itemStyle={{ fontSize: 12 }}
+                              labelFormatter={(value) => formatTimeLabel(Number(value))}
+                            />
+                            <Line type="monotone" dataKey="carrier" stroke="#64748b" strokeWidth={1.5} strokeDasharray="6 6" dot={false} name="Carrier c(t)" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Modulated Signal */}
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-violet-400">{mode} Signal s(t)</p>
+                      <div className="h-[220px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                            <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
+                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
+                              labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
+                              itemStyle={{ fontSize: 12 }}
+                              labelFormatter={(value) => formatTimeLabel(Number(value))}
+                            />
+                            <Line type="monotone" dataKey="modulated" stroke="#34d399" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} />
+                            {snapshot ? (
+                              <Line type="monotone" dataKey="savedModulated" stroke="#f59e0b" strokeWidth={1.7} strokeDasharray="5 5" dot={false} name={`Saved ${snapshot.mode} snapshot`} />
+                            ) : null}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   </div>
 
                   {/* ── Side-by-side comparison ── */}
@@ -2265,7 +2354,7 @@ function App() {
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <ActionButton onClick={trainModel} disabled={isTraining} variant="primary" icon={<BrainCircuit size={16} />}>
-                      {isTraining ? "Training model..." : "Train AM/FM Model"}
+                      {isTraining ? "Training model..." : "Train AM/FM/PM Model"}
                     </ActionButton>
                     <ActionButton onClick={() => void predictCurrentWaveform()} variant="secondary-sky" icon={<PlayCircle size={16} />}>
                       Predict Current Signal
@@ -2426,7 +2515,7 @@ function App() {
                     className="rounded-3xl border border-amber-500/20 bg-slate-900/75 p-5 shadow-2xl shadow-black/20 backdrop-blur"
                   >
                     <p className="text-base font-semibold text-amber-300">Constellation Diagram (I/Q)</p>
-                    <p className="mt-2 text-sm text-slate-400">{isDigitalMode ? "Ideal symbol positions shown as scatter points." : "Coherent demodulation I vs Q representation."}</p>
+                    <p className="mt-2 text-sm text-slate-400">Coherent demodulation I vs Q representation.</p>
                     <div className="mt-4 h-[340px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <ScatterChart margin={{ top: 16, right: 24, left: 16, bottom: 16 }}>
@@ -2489,9 +2578,7 @@ function App() {
                   </div>
                   <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/60 p-3">
                     <p className="text-xs text-slate-400">
-                      {isDigitalMode
-                        ? `${mode} theoretical BER uses Q-function approximation. Simulated BER counts decision errors at symbol boundaries.`
-                        : `${mode} BER is an empirical approximation. Increase noise to observe BER rise.`}
+                      {`${mode} BER is an empirical approximation. Increase noise to observe BER rise.`}
                     </p>
                   </div>
                 </motion.section>
@@ -2825,38 +2912,6 @@ function FeatureButton({
     >
       {icon}
       <span>{label}</span>
-    </button>
-  );
-}
-
-function VisibilityButton({
-  label,
-  active,
-  onClick,
-  tone,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  tone: "sky" | "emerald" | "violet";
-}) {
-  const toneClasses = {
-    sky: active ? "border-sky-500/30 bg-sky-500/10 text-sky-200" : "border-white/10 bg-slate-950/70 text-slate-400",
-    emerald: active ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-white/10 bg-slate-950/70 text-slate-400",
-    violet: active ? "border-violet-500/30 bg-violet-500/10 text-violet-200" : "border-white/10 bg-slate-950/70 text-slate-400",
-  };
-
-  return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-center text-xs font-medium leading-5 whitespace-normal break-words transition hover:text-white",
-          toneClasses[tone],
-        )}
-      >
-      {active ? <Eye size={14} /> : <EyeOff size={14} />}
-      {label}
     </button>
   );
 }
