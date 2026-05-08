@@ -73,8 +73,8 @@ html.light .bg-slate-900\/75,
 html.light .bg-slate-900\/70,
 html.light .bg-slate-900\/80,
 html.light .bg-slate-900\/90 {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  border-color: rgba(148, 163, 184, 0.25) !important;
+  background-color: rgba(226, 232, 240, 0.5) !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
 }
 
 html.light .bg-slate-950\/70,
@@ -83,7 +83,8 @@ html.light .bg-slate-950\/75,
 html.light .bg-slate-950\/60,
 html.light .bg-slate-950\/95,
 html.light .bg-slate-950 {
-  background-color: rgba(241, 245, 249, 0.9) !important;
+  background-color: rgba(241, 245, 249, 0.7) !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
 }
 
 html.light .text-slate-100,
@@ -333,4 +334,34 @@ html.light .text-emerald-200 {
 
 html.light .text-violet-200 {
   color: #6d28d9 !important;
+}
+
+/* Active tab / mode button overrides in light mode */
+html.light .bg-white.text-slate-950 {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 15px -3px rgba(148, 163, 184, 0.25) !important;
+}
+
+/* Slider track and input backgrounds in light mode */
+html.light .bg-slate-800 {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .bg-slate-700 {
+  background-color: #cbd5e1 !important;
+}
+
+/* Subtle card shadows for depth in light mode */
+html.light .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(148, 163, 184, 0.15) !important;
+}
+
+html.light .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(148, 163, 184, 0.12) !important;
+}
+
+/* Range/slider accent color in light mode */
+html.light input[type="range"] {
+  accent-color: #0284c7;
 }
