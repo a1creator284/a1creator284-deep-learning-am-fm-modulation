@@ -2,6 +2,16 @@
 
 A complete **college project + portfolio project** for learning and demonstrating **AM modulation, FM modulation, PM modulation, signal analysis, and deep learning-based modulation understanding**.
 
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-05-09 | Simulator graphs redesigned — individual charts enlarged (280 px) with axis labels and colored borders; new **Combined Signal View** graph added showing all three signals overlaid with a recharts Legend |
+
+---
+
 This project combines:
 - a modern **React + Vite + Tailwind CSS** frontend
 - a real **FastAPI + PyTorch** backend
@@ -303,8 +313,9 @@ Main page for waveform generation and signal control.
 - noise control
 - duration control
 - sample rate control
-- separate waveform graphs (message, carrier, modulated)
-- snapshot compare
+- **individual waveform graphs** (message, carrier, modulated) — each 280 px tall with axis labels and colored borders for clarity
+- **combined overlay graph** — all three signals on a shared time axis with a recharts Legend for direct comparison
+- snapshot compare (snapshot also appears in the combined graph)
 - CSV export
 - session save/load
 - reset actions

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -1761,14 +1762,17 @@ function App() {
 
                   <div className="mt-5 grid gap-4 lg:grid-cols-3">
                     {/* Message Signal */}
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-sky-400">Message m(t)</p>
-                      <div className="h-[220px] w-full">
+                    <div className="rounded-2xl border border-sky-500/20 bg-slate-950/70 p-5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-sky-400">Message m(t)</p>
+                      </div>
+                      <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                          <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
                             <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
-                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} label={{ value: "Time (s)", position: "insideBottom", offset: -16, fill: "#64748b", fontSize: 11 }} />
+                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} width={42} label={{ value: "Amplitude (V)", angle: -90, position: "insideLeft", offset: 8, fill: "#64748b", fontSize: 11 }} />
                             <Tooltip
                               contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
                               labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
@@ -1782,48 +1786,86 @@ function App() {
                     </div>
 
                     {/* Carrier Signal */}
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-400">Carrier c(t)</p>
-                      <div className="h-[220px] w-full">
+                    <div className="rounded-2xl border border-slate-500/30 bg-slate-950/70 p-5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Carrier c(t)</p>
+                      </div>
+                      <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                          <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
                             <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
-                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} label={{ value: "Time (s)", position: "insideBottom", offset: -16, fill: "#64748b", fontSize: 11 }} />
+                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} width={42} label={{ value: "Amplitude (V)", angle: -90, position: "insideLeft", offset: 8, fill: "#64748b", fontSize: 11 }} />
                             <Tooltip
                               contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
                               labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
                               itemStyle={{ fontSize: 12 }}
                               labelFormatter={(value) => formatTimeLabel(Number(value))}
                             />
-                            <Line type="monotone" dataKey="carrier" stroke="#64748b" strokeWidth={1.5} strokeDasharray="6 6" dot={false} name="Carrier c(t)" />
+                            <Line type="monotone" dataKey="carrier" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="Carrier c(t)" />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* Modulated Signal */}
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-violet-400">{mode} Signal s(t)</p>
-                      <div className="h-[220px] w-full">
+                    <div className="rounded-2xl border border-violet-500/20 bg-slate-950/70 p-5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-violet-400" />
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-violet-400">{mode} Signal s(t)</p>
+                      </div>
+                      <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                          <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
                             <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} />
-                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} />
+                            <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} label={{ value: "Time (s)", position: "insideBottom", offset: -16, fill: "#64748b", fontSize: 11 }} />
+                            <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} width={42} label={{ value: "Amplitude (V)", angle: -90, position: "insideLeft", offset: 8, fill: "#64748b", fontSize: 11 }} />
                             <Tooltip
                               contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
                               labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
                               itemStyle={{ fontSize: 12 }}
                               labelFormatter={(value) => formatTimeLabel(Number(value))}
                             />
-                            <Line type="monotone" dataKey="modulated" stroke="#34d399" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} />
+                            <Line type="monotone" dataKey="modulated" stroke="#a78bfa" strokeWidth={2.5} dot={false} name={`${mode} signal s(t)`} />
                             {snapshot ? (
                               <Line type="monotone" dataKey="savedModulated" stroke="#f59e0b" strokeWidth={1.7} strokeDasharray="5 5" dot={false} name={`Saved ${snapshot.mode} snapshot`} />
                             ) : null}
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* ── Combined Signal View ── */}
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/70 p-5">
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Combined Signal View</p>
+                        <p className="mt-0.5 text-xs text-slate-500">All three signals overlaid on a shared time axis for direct comparison</p>
+                      </div>
+                    </div>
+                    <div className="h-[320px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData} margin={{ top: 12, right: 24, left: 10, bottom: 32 }}>
+                          <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="time" stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={formatTimeLabel} label={{ value: "Time (s)", position: "insideBottom", offset: -18, fill: "#64748b", fontSize: 11 }} />
+                          <YAxis stroke={theme === "light" ? "#94a3b8" : "#475569"} tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} width={46} label={{ value: "Amplitude (V)", angle: -90, position: "insideLeft", offset: 10, fill: "#64748b", fontSize: 11 }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: theme === "light" ? "#e2e8f0" : "#1e293b", borderRadius: 10 }}
+                            labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
+                            itemStyle={{ fontSize: 12 }}
+                            labelFormatter={(value) => formatTimeLabel(Number(value))}
+                          />
+                          <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 11, paddingBottom: 4 }} formatter={(value) => <span style={{ color: "#94a3b8" }}>{value}</span>} />
+                          <Line type="monotone" dataKey="message" stroke="#38bdf8" strokeWidth={2} dot={false} name="Message m(t)" />
+                          <Line type="monotone" dataKey="carrier" stroke="#94a3b8" strokeWidth={1.2} strokeDasharray="6 4" dot={false} name="Carrier c(t)" />
+                          <Line type="monotone" dataKey="modulated" stroke="#a78bfa" strokeWidth={2.5} dot={false} name={`${mode} s(t)`} />
+                          {snapshot ? (
+                            <Line type="monotone" dataKey="savedModulated" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name={`Snapshot (${snapshot.mode})`} />
+                          ) : null}
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
 
