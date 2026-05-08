@@ -46,83 +46,86 @@ input {
 /* ── Light Theme ──────────────────────────────────────────────────── */
 
 html.light body {
-  background: #f8fafc;
-  color: #1e293b;
+  background: #e2e8f0;
+  color: #0f172a;
   color-scheme: light;
 }
 
 html.light ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #cbd5e1;
 }
 
 html.light ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.5), rgba(16, 185, 129, 0.5));
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.6), rgba(16, 185, 129, 0.6));
 }
 
 html.light ::selection {
-  background: rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.3);
   color: #0f172a;
 }
 
 /* Light theme overrides for main dark backgrounds */
 html.light .bg-\[\#020617\] {
-  background-color: #f8fafc !important;
+  background-color: #e2e8f0 !important;
 }
 
+/* Primary cards — fully opaque with distinct borders */
 html.light .bg-slate-900\/75,
 html.light .bg-slate-900\/70,
 html.light .bg-slate-900\/80,
 html.light .bg-slate-900\/90 {
-  background-color: rgba(226, 232, 240, 0.5) !important;
-  border-color: rgba(148, 163, 184, 0.35) !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06) !important;
 }
 
+/* Inner / secondary cards */
 html.light .bg-slate-950\/70,
 html.light .bg-slate-950\/80,
 html.light .bg-slate-950\/75,
 html.light .bg-slate-950\/60,
 html.light .bg-slate-950\/95,
 html.light .bg-slate-950 {
-  background-color: rgba(241, 245, 249, 0.7) !important;
-  border-color: rgba(148, 163, 184, 0.35) !important;
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
 }
 
 html.light .text-slate-100,
 html.light .text-white {
-  color: #1e293b !important;
+  color: #0f172a !important;
 }
 
 html.light .text-slate-200 {
-  color: #334155 !important;
+  color: #1e293b !important;
 }
 
 html.light .text-slate-300 {
-  color: #475569 !important;
+  color: #334155 !important;
 }
 
 html.light .text-slate-400 {
-  color: #64748b !important;
+  color: #475569 !important;
 }
 
 html.light .text-slate-500 {
-  color: #94a3b8 !important;
+  color: #64748b !important;
 }
 
 html.light .border-white\/10 {
-  border-color: rgba(148, 163, 184, 0.3) !important;
+  border-color: #e2e8f0 !important;
 }
 
 html.light .shadow-black\/30,
 html.light .shadow-black\/20,
 html.light .shadow-black\/50 {
-  --tw-shadow-color: rgba(148, 163, 184, 0.15) !important;
+  --tw-shadow-color: rgba(0, 0, 0, 0.06) !important;
 }
 
 /* Light theme gradient overlay */
 html.light .pointer-events-none.absolute.inset-0 {
-  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.06), transparent 28%),
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.05), transparent 26%),
-    radial-gradient(circle at bottom, rgba(168, 85, 247, 0.05), transparent 24%) !important;
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.06), transparent 28%),
+    radial-gradient(circle at bottom, rgba(168, 85, 247, 0.06), transparent 26%) !important;
 }
 
 /* ── Print Styles ─────────────────────────────────────────────────── */
