@@ -8,6 +8,7 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
+| 2026-05-09 | **Added comprehensive PRESENTATION_GUIDE.md** — complete walkthrough of every feature, button, parameter, recommended values, viva Q&A, troubleshooting, and demo script for judges |
 | 2026-05-09 | Maximised classifier accuracy — signal length 128→256, samples 120→300/class, epochs 5→15, hidden 24→64 neurons, 1→2 hidden layers, Leaky ReLU, He init, LR decay; added 8 engineered features (envelope variance, ZCR, crest factor, IF variance); live modulated text signal chart in Audio Lab; "Why 100% is impossible" explanation panel on AI Analysis page |
 | 2026-05-09 | Added Auto Demo button — 8-step scripted demo with live overlay and progress bar |
 | 2026-05-09 | Added 5 new features: (1) "How It Works" 4-step flow on landing page; (2) Live SNR gauge with 20-segment color bar (green=ideal, red=severe); (3) Mode-change callout banner explaining what changed when switching AM/FM/PM; (4) Keyboard shortcuts A/F/P/T/Space; (5) Floating ? button + shortcut hint overlay panel |
@@ -30,6 +31,20 @@ This project combines:
 - backend training/prediction/report APIs
 - automated backend smoke tests
 - Playwright UI tests for major frontend flows
+
+---
+
+# 📖 PRESENTATION GUIDE
+
+**For judges and viva demonstrations**, see the comprehensive **[PRESENTATION_GUIDE.md](./PRESENTATION_GUIDE.md)** file.
+
+This guide includes:
+- Complete walkthrough of every feature and button
+- Recommended parameter values for best results
+- Viva Q&A with ready-made answers
+- Auto Demo script explanation
+- Troubleshooting tips
+- Step-by-step demonstration flow
 
 ---
 
