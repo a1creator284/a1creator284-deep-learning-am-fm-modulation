@@ -8,6 +8,8 @@ A complete **college project + portfolio project** for learning and demonstratin
 
 | Date | Change |
 |------|--------|
+| 2026-05-21 | **Added Demodulation Lab page** — complete signal recovery demonstration for AM, FM, and PM with step-by-step algorithms, quality metrics (RMSE, correlation, SNR), error analysis, and side-by-side comparison view |
+| 2026-05-21 | **Added AM vs FM vs PM comparison section** — overlays all three modulated signals with identical parameters and same Y-axis scale for direct magnitude comparison |
 | 2026-05-09 | **Added comprehensive PRESENTATION_GUIDE.md** — complete walkthrough of every feature, button, parameter, recommended values, viva Q&A, troubleshooting, and demo script for judges |
 | 2026-05-09 | Maximised classifier accuracy — signal length 128→256, samples 120→300/class, epochs 5→15, hidden 24→64 neurons, 1→2 hidden layers, Leaky ReLU, He init, LR decay; added 8 engineered features (envelope variance, ZCR, crest factor, IF variance); live modulated text signal chart in Audio Lab; "Why 100% is impossible" explanation panel on AI Analysis page |
 | 2026-05-09 | Added Auto Demo button — 8-step scripted demo with live overlay and progress bar |
@@ -411,7 +413,31 @@ Used for training and analysis.
 
 ---
 
-## 7.5 Backend & Tests
+## 7.6 Demodulation Lab
+**NEW** — Complete signal recovery demonstration page.
+
+### Features
+- **AM envelope detector** — full-wave rectification → low-pass filter → DC removal → normalization
+- **FM frequency discriminator** — instantaneous frequency extraction → carrier subtraction → scaling → smoothing
+- **PM phase detector** — instantaneous phase extraction → phase-to-amplitude scaling → smoothing
+- **Step-by-step algorithm explanation** — each demodulation method shows 3-4 steps with formulas
+- **Quality metrics panel** — RMSE, correlation coefficient, SNR (dB), max error for all three methods
+- **Received signal graph** — shows the modulated signal with noise
+- **Recovered vs Original graph** — overlays the demodulated output with the original message
+- **Error signal graph** — shows the difference between recovered and original
+- **Compare All tab** — displays all three demodulation methods side by side on one chart
+- **Real-time updates** — metrics and graphs update automatically when you change parameters on the Simulator page
+- page-specific help
+
+### What it demonstrates
+- How the original message is extracted from the modulated carrier
+- Why FM and PM are more noise-resistant than AM
+- The mathematical steps behind each demodulation algorithm
+- Quantitative comparison of demodulation quality
+
+---
+
+## 7.7 Backend & Tests
 Used to connect with the real FastAPI backend.
 
 ### Features
