@@ -81,6 +81,15 @@ import {
   type GeneratedProjectReport,
 } from "./utils/projectReport";
 import {
+  demodulateAM,
+  demodulateFM,
+  demodulatePM,
+  buildCompareData,
+  type DemodResult,
+  type CompareChartPoint,
+} from "./utils/demodulation";
+import { DemodulationPage } from "./components/DemodulationPage";
+import {
   DEFAULT_SIGNAL_PARAMETERS,
   createRandomSignalParameters,
   generateSignal,
@@ -102,7 +111,7 @@ const SESSION_STORAGE_KEY = "signal-modulation-lab-session-v3";
 const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 type SignalSource = "analog" | "text";
-type ActivePage = "simulator" | "flow" | "audio" | "analysis" | "backend";
+type ActivePage = "simulator" | "flow" | "audio" | "analysis" | "backend" | "demodulation";
 type Accent = "sky" | "emerald" | "violet" | "amber";
 type ThemeMode = "dark" | "light";
 
@@ -404,6 +413,49 @@ const PAGE_HELP_CONTENT: Record<ActivePage, { title: string; description: string
       },
     ],
   },
+  demodulation: {
+    title: "How to use the Demodulation Lab page",
+    description:
+      "This page demonstrates the complete demodulation process for AM, FM, and PM signals. It shows how the original message is recovered from the modulated carrier using real signal processing algorithms.",
+    sections: [
+      {
+        title: "What demodulation is",
+        steps: [
+          "Demodulation is the reverse of modulation — it extracts the original message signal from the received modulated carrier.",
+          "AM demodulation uses envelope detection: the absolute value of the signal is taken, then low-pass filtered to recover the message envelope.",
+          "FM demodulation uses frequency discrimination: the instantaneous frequency is extracted and the carrier frequency is subtracted to get the message.",
+          "PM demodulation uses phase extraction: the instantaneous phase deviation is measured and scaled back to the original message amplitude.",
+        ],
+      },
+      {
+        title: "Reading the graphs",
+        steps: [
+          "The top graph shows the received modulated signal (with noise if noise level > 0).",
+          "The middle graph shows the demodulated output overlaid with the original message — they should match closely.",
+          "The bottom graph shows the demodulation error (difference between original and recovered) — smaller is better.",
+          "The quality metrics panel shows SNR, RMSE, and correlation coefficient for each demodulation method.",
+        ],
+      },
+      {
+        title: "Comparing all three methods",
+        steps: [
+          "Use the AM / FM / PM tabs at the top to switch between demodulation methods.",
+          "The 'Compare All' view shows all three recovered signals on one chart for direct comparison.",
+          "Increase the noise level on the Simulator page and come back here to see how each method degrades differently.",
+          "AM degrades fastest under noise because envelope detection is sensitive to amplitude distortion.",
+        ],
+      },
+      {
+        title: "Best demo flow",
+        steps: [
+          "Start with noise level 0.02 (clean) and show that the recovered signal matches the original perfectly.",
+          "Increase noise to 0.15 and show how the RMSE increases and the recovered signal becomes noisier.",
+          "Switch between AM, FM, and PM to show that FM and PM are more noise-resistant than AM.",
+          "Use the 'Compare All' tab to show all three side by side for judges.",
+        ],
+      },
+    ],
+  },
 };
 
 function triggerBrowserDownload(fileName: string, content: string, mimeType: string) {
@@ -495,6 +547,7 @@ function App() {
   const [isDemoRunning, setIsDemoRunning] = useState(false);
   const [demoStep, setDemoStep] = useState<string>("");
   const [demoProgress, setDemoProgress] = useState(0);
+  const [activeDemodTab, setActiveDemodTab] = useState<"AM" | "FM" | "PM" | "compare">("AM");
   const demoAbortRef = useRef(false);
   const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -664,6 +717,103 @@ function App() {
         pm: pmPoints[i * stride]?.modulated ?? pmPoints[i]?.modulated ?? 0,
       }));
   }, [params]);
+
+  // ── Demodulation page data ──
+  const demodulationData = useMemo(() => {
+    const maxPts = 1200;
+    const stride = Math.max(1, Math.ceil(activeSignalData.length / maxPts));
+
+    // AM envelope detection: |s(t)| → low-pass filter → center → normalize
+    const amEnvelope = activeSignalData.map(p => Math.abs(p.modulated));
+    const winAM = Math.max(5, Math.round(activeSignalData.length / 18));
+    const amSmoothed: number[] = amEnvelope.map((_, i) => {
+      const start = Math.max(0, i - Math.floor(winAM / 2));
+      const end = Math.min(amEnvelope.length, i + Math.floor(winAM / 2) + 1);
+      const slice = amEnvelope.slice(start, end);
+      return slice.reduce((s, v) => s + v, 0) / slice.length;
+    });
+    const amCentered = amSmoothed.map(v => v - params.carrierAmplitude);
+    const amPeak = Math.max(1e-6, ...amCentered.map(v => Math.abs(v)));
+    const amRecovered = amCentered.map(v => (v / amPeak) * params.messageAmplitude);
+
+    // FM discriminator: use instantaneousFrequency field, fallback to phase diff
+    const fmPoints = generateSignal("FM", params);
+    const fmRecovered = fmPoints.map(p => {
+      const instFreq = p.instantaneousFrequency ?? params.carrierFrequency;
+      return ((instFreq - params.carrierFrequency) / Math.max(params.frequencyDeviation, 1)) * params.messageAmplitude;
+    });
+    const winFM = Math.max(3, Math.round(fmPoints.length / 26));
+    const fmSmoothed: number[] = fmRecovered.map((_, i) => {
+      const start = Math.max(0, i - Math.floor(winFM / 2));
+      const end = Math.min(fmRecovered.length, i + Math.floor(winFM / 2) + 1);
+      const slice = fmRecovered.slice(start, end);
+      return slice.reduce((s, v) => s + v, 0) / slice.length;
+    });
+
+    // PM phase detector: use instantaneousPhase field
+    const pmPoints = generateSignal("PM", params);
+    const kp = params.frequencyDeviation / Math.max(params.messageAmplitude, 1e-6);
+    const pmRecovered = pmPoints.map(p => {
+      const phase = p.instantaneousPhase ?? 0;
+      return phase / Math.max(kp, 1e-6);
+    });
+    const winPM = Math.max(3, Math.round(pmPoints.length / 26));
+    const pmSmoothed: number[] = pmRecovered.map((_, i) => {
+      const start = Math.max(0, i - Math.floor(winPM / 2));
+      const end = Math.min(pmRecovered.length, i + Math.floor(winPM / 2) + 1);
+      const slice = pmRecovered.slice(start, end);
+      return slice.reduce((s, v) => s + v, 0) / slice.length;
+    });
+
+    // Build chart data
+    const chartPoints = activeSignalData
+      .filter((_, i) => i % stride === 0 || i === activeSignalData.length - 1)
+      .map((pt, idx) => {
+        const si = idx * stride;
+        return {
+          time: pt.time,
+          modulated: pt.modulated,
+          original: pt.message,
+          amRecovered: amRecovered[si] ?? 0,
+          fmRecovered: fmSmoothed[si] ?? 0,
+          pmRecovered: pmSmoothed[si] ?? 0,
+          amError: (amRecovered[si] ?? 0) - pt.message,
+          fmError: (fmSmoothed[si] ?? 0) - pt.message,
+          pmError: (pmSmoothed[si] ?? 0) - pt.message,
+        };
+      });
+
+    // Quality metrics
+    const rmse = (errs: number[]) => Math.sqrt(errs.reduce((s, e) => s + e * e, 0) / Math.max(errs.length, 1));
+    const corr = (a: number[], b: number[]) => {
+      const n = Math.min(a.length, b.length);
+      const ma = a.slice(0, n).reduce((s, v) => s + v, 0) / n;
+      const mb = b.slice(0, n).reduce((s, v) => s + v, 0) / n;
+      let num = 0, da = 0, db = 0;
+      for (let i = 0; i < n; i++) {
+        const ai = (a[i] ?? 0) - ma, bi = (b[i] ?? 0) - mb;
+        num += ai * bi; da += ai * ai; db += bi * bi;
+      }
+      return num / Math.max(Math.sqrt(da * db), 1e-9);
+    };
+
+    const origVals = activeSignalData.map(p => p.message);
+    const amRmse = rmse(amRecovered.map((v, i) => v - (origVals[i] ?? 0)));
+    const fmRmse = rmse(fmSmoothed.map((v, i) => v - (origVals[i] ?? 0)));
+    const pmRmse = rmse(pmSmoothed.map((v, i) => v - (origVals[i] ?? 0)));
+    const amCorr = corr(amRecovered, origVals);
+    const fmCorr = corr(fmSmoothed, origVals);
+    const pmCorr = corr(pmSmoothed, origVals);
+
+    return {
+      chartPoints,
+      metrics: {
+        am: { rmse: amRmse, corr: amCorr },
+        fm: { rmse: fmRmse, corr: fmCorr },
+        pm: { rmse: pmRmse, corr: pmCorr },
+      },
+    };
+  }, [activeSignalData, params]);
 
   const modulationIndex = params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001);
   const bandwidth = mode === "AM" ? 2 * params.messageFrequency
@@ -1664,13 +1814,14 @@ function App() {
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.15 }}
-              className="grid w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1 md:grid-cols-3 xl:grid-cols-5"
+              className="grid w-full grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-slate-950/70 p-1 md:grid-cols-3 xl:grid-cols-6"
             >
               {[
                 { id: "simulator" as const, label: "Simulator" },
                 { id: "flow" as const, label: "Flow & Report" },
                 { id: "audio" as const, label: "Audio Lab" },
                 { id: "analysis" as const, label: "AI Analysis" },
+                { id: "demodulation" as const, label: "Demodulation" },
                 { id: "backend" as const, label: "Backend & Tests" },
               ].map((page) => (
                 <motion.button
@@ -3890,7 +4041,19 @@ function App() {
                 </motion.section>
               </div>
             </div>
-          )}
+          ) : activePage === "demodulation" ? (
+            <DemodulationPage
+              activeSignalData={activeSignalData}
+              params={params}
+              mode={mode}
+              theme={theme}
+              formatTimeLabel={formatTimeLabel}
+              activeDemodTab={activeDemodTab}
+              setActiveDemodTab={setActiveDemodTab}
+              onHelpClick={() => setHelpPage("demodulation")}
+              onSimulatorClick={() => setActivePage("simulator")}
+            />
+          ) : null}
         </main>
       </div>
 
