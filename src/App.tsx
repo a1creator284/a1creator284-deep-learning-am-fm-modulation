@@ -548,6 +548,7 @@ function App() {
   const [demoStep, setDemoStep] = useState<string>("");
   const [demoProgress, setDemoProgress] = useState(0);
   const [activeDemodTab, setActiveDemodTab] = useState<"AM" | "FM" | "PM" | "compare">("AM");
+  const [graphZoom, setGraphZoom] = useState(1); // 1 = 100%, 1.5 = 150%, 2 = 200%
   const demoAbortRef = useRef(false);
   const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -2227,6 +2228,70 @@ function App() {
                     {snapshot ? <FeatureButton label="Clear snapshot" icon={<X size={15} />} tone="amber" onClick={clearSnapshot} /> : null}
                   </div>
 
+                  {/* Zoom controls */}
+                  <div className="mt-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Graph Zoom:</p>
+                    <div className="flex gap-2">
+                      <motion.button
+                        type="button"
+                        onClick={() => setGraphZoom(0.75)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                          graphZoom === 0.75
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                            : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200"
+                        )}
+                      >
+                        75%
+                      </motion.button>
+                      <motion.button
+                        type="button"
+                        onClick={() => setGraphZoom(1)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                          graphZoom === 1
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                            : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200"
+                        )}
+                      >
+                        100%
+                      </motion.button>
+                      <motion.button
+                        type="button"
+                        onClick={() => setGraphZoom(1.5)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                          graphZoom === 1.5
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                            : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200"
+                        )}
+                      >
+                        150%
+                      </motion.button>
+                      <motion.button
+                        type="button"
+                        onClick={() => setGraphZoom(2)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                          graphZoom === 2
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                            : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200"
+                        )}
+                      >
+                        200%
+                      </motion.button>
+                    </div>
+                    <p className="ml-auto text-xs text-slate-500">Adjust graph height for better visibility</p>
+                  </div>
+
                   {snapshot ? (
                     <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-6 text-amber-100">
                       Saved comparison graph: <span className="font-semibold">{snapshot.mode}</span> at {snapshot.createdAt}. The orange dashed line shows the saved waveform.
@@ -2252,7 +2317,7 @@ function App() {
                         />
                         <p className="text-sm font-semibold uppercase tracking-[0.15em] text-sky-400">Message Signal — m(t)</p>
                       </div>
-                      <div className="h-[340px] w-full">
+                      <div className="w-full" style={{ height: `${340 * graphZoom}px` }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={chartData} margin={{ top: 12, right: 32, left: 16, bottom: 36 }}>
                             <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
@@ -2298,7 +2363,7 @@ function App() {
                         />
                         <p className="text-sm font-semibold uppercase tracking-[0.15em] text-emerald-400">Carrier Signal — c(t)</p>
                       </div>
-                      <div className="h-[340px] w-full">
+                      <div className="w-full" style={{ height: `${340 * graphZoom}px` }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={chartData} margin={{ top: 12, right: 32, left: 16, bottom: 36 }}>
                             <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
@@ -2344,7 +2409,7 @@ function App() {
                         />
                         <p className="text-sm font-semibold uppercase tracking-[0.15em] text-violet-400">{mode} Modulated Signal — s(t)</p>
                       </div>
-                      <div className="h-[340px] w-full">
+                      <div className="w-full" style={{ height: `${340 * graphZoom}px` }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={chartData} margin={{ top: 12, right: 32, left: 16, bottom: 36 }}>
                             <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
@@ -2393,7 +2458,7 @@ function App() {
                         <p className="mt-0.5 text-xs text-slate-500">All three signals overlaid on a shared time axis for direct comparison</p>
                       </div>
                     </div>
-                    <div className="h-[380px] w-full">
+                    <div className="w-full" style={{ height: `${380 * graphZoom}px` }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 12, right: 32, left: 16, bottom: 36 }}>
                           <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
