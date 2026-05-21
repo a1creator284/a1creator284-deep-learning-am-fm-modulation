@@ -646,6 +646,25 @@ function App() {
     });
   }, [params]);
 
+  // ── AM vs FM vs PM comparison — same parameters, same Y-axis ──
+  const amFmPmComparisonData = useMemo(() => {
+    // Use the same params for all three modes so magnitude is identical
+    const sharedParams = { ...params, noiseLevel: 0 }; // no noise for clean comparison
+    const amPoints = generateSignal("AM", sharedParams);
+    const fmPoints = generateSignal("FM", sharedParams);
+    const pmPoints = generateSignal("PM", sharedParams);
+    const maxChartPoints = 2400;
+    const stride = Math.max(1, Math.ceil(amPoints.length / maxChartPoints));
+    return amPoints
+      .filter((_, i) => i % stride === 0 || i === amPoints.length - 1)
+      .map((pt, i) => ({
+        time: pt.time,
+        am: amPoints[i * stride]?.modulated ?? pt.modulated,
+        fm: fmPoints[i * stride]?.modulated ?? fmPoints[i]?.modulated ?? 0,
+        pm: pmPoints[i * stride]?.modulated ?? pmPoints[i]?.modulated ?? 0,
+      }));
+  }, [params]);
+
   const modulationIndex = params.messageAmplitude / Math.max(params.carrierAmplitude, 0.0001);
   const bandwidth = mode === "AM" ? 2 * params.messageFrequency
     : mode === "FM" ? 2 * (params.frequencyDeviation + params.messageFrequency)
@@ -2259,7 +2278,168 @@ function App() {
                     </div>
                   </motion.div>
 
-                                    {/* ── Side-by-side comparison ── */}
+                  {/* ── AM vs FM vs PM Modulated Signal Comparison ── */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.55, delay: 0.35 }}
+                    className="mt-6 rounded-2xl border border-white/10 bg-slate-950/80 p-5"
+                    style={{ boxShadow: "0 0 50px 6px rgba(56,189,248,0.07), 0 0 50px 6px rgba(52,211,153,0.05), 0 0 50px 6px rgba(167,139,250,0.07)" }}
+                  >
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <motion.span
+                            animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+                            transition={{ duration: 2.5, repeat: Infinity }}
+                            className="h-3 w-3 rounded-full bg-gradient-to-br from-sky-400 via-emerald-400 to-violet-400 shadow-lg"
+                          />
+                          <p className="text-sm font-bold uppercase tracking-[0.15em] text-white">AM vs FM vs PM — Modulated Signal Comparison</p>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          All three modulation types rendered with <span className="text-slate-300 font-medium">identical parameters</span> and <span className="text-slate-300 font-medium">same Y-axis scale</span> — noise removed for clean comparison
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-300">
+                          <span className="h-2 w-2 rounded-full bg-sky-400" />AM
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-300">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" />FM
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-300">
+                          <span className="h-2 w-2 rounded-full bg-violet-400" />PM
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Three stacked comparison graphs — same Y domain */}
+                    {(() => {
+                      const yMax = params.carrierAmplitude * 1.15;
+                      const yDomain: [number, number] = [-yMax, yMax];
+                      const graphConfigs = [
+                        { key: "am" as const, label: "AM — Amplitude Modulation", color: "#38bdf8", border: "border-sky-500/30", desc: "Envelope varies · Carrier frequency constant" },
+                        { key: "fm" as const, label: "FM — Frequency Modulation", color: "#34d399", border: "border-emerald-500/30", desc: "Amplitude constant · Instantaneous frequency varies" },
+                        { key: "pm" as const, label: "PM — Phase Modulation",     color: "#a78bfa", border: "border-violet-500/30", desc: "Amplitude constant · Phase shifts with message" },
+                      ];
+                      return (
+                        <div className="flex flex-col gap-5">
+                          {graphConfigs.map(({ key, label, color, border, desc }, idx) => (
+                            <motion.div
+                              key={key}
+                              initial={{ opacity: 0, x: idx % 2 === 0 ? -16 : 16 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.45, delay: 0.1 * idx }}
+                              className={`rounded-xl border ${border} bg-slate-900/60 p-4`}
+                            >
+                              <div className="mb-2 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}80` }} />
+                                  <p className="text-xs font-semibold uppercase tracking-[0.15em]" style={{ color }}>{label}</p>
+                                </div>
+                                <p className="text-[10px] text-slate-500">{desc}</p>
+                              </div>
+                              <div className="h-[220px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={amFmPmComparisonData} margin={{ top: 8, right: 28, left: 12, bottom: 28 }}>
+                                    <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
+                                    <XAxis
+                                      dataKey="time"
+                                      stroke="#475569"
+                                      tick={{ fill: "#64748b", fontSize: 10 }}
+                                      tickFormatter={formatTimeLabel}
+                                      label={{ value: "Time (s)", position: "insideBottom", offset: -16, fill: "#64748b", fontSize: 11 }}
+                                    />
+                                    <YAxis
+                                      stroke="#475569"
+                                      tick={{ fill: "#64748b", fontSize: 10 }}
+                                      domain={yDomain}
+                                      width={48}
+                                      label={{ value: "Amplitude (V)", angle: -90, position: "insideLeft", offset: 14, fill: "#64748b", fontSize: 11 }}
+                                    />
+                                    <Tooltip
+                                      contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: color, borderRadius: 8 }}
+                                      labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
+                                      itemStyle={{ fontSize: 12, color }}
+                                      labelFormatter={(v) => formatTimeLabel(Number(v))}
+                                      formatter={(v: number) => [`${v.toFixed(3)} V`, label.split(" — ")[0]]}
+                                    />
+                                    <Line
+                                      type="monotone"
+                                      dataKey={key}
+                                      stroke={color}
+                                      strokeWidth={2}
+                                      dot={false}
+                                      name={label.split(" — ")[0]}
+                                      isAnimationActive={true}
+                                      animationDuration={900}
+                                      animationEasing="ease-out"
+                                      animationBegin={idx * 150}
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Overlay comparison — all three on one chart */}
+                    <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-300">Overlay — All Three on Same Axis</p>
+                        <span className="rounded-full border border-white/10 bg-slate-800 px-2 py-0.5 text-[10px] text-slate-500">same scale · no noise</span>
+                      </div>
+                      <div className="h-[280px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={amFmPmComparisonData} margin={{ top: 8, right: 28, left: 12, bottom: 28 }}>
+                            <CartesianGrid stroke={theme === "light" ? "#e2e8f0" : "#1e293b"} strokeDasharray="3 3" vertical={false} />
+                            <XAxis
+                              dataKey="time"
+                              stroke="#475569"
+                              tick={{ fill: "#64748b", fontSize: 10 }}
+                              tickFormatter={formatTimeLabel}
+                              label={{ value: "Time (s)", position: "insideBottom", offset: -16, fill: "#64748b", fontSize: 11 }}
+                            />
+                            <YAxis
+                              stroke="#475569"
+                              tick={{ fill: "#64748b", fontSize: 10 }}
+                              domain={[-(params.carrierAmplitude * 1.15), params.carrierAmplitude * 1.15]}
+                              width={48}
+                              label={{ value: "Amplitude (V)", angle: -90, position: "insideLeft", offset: 14, fill: "#64748b", fontSize: 11 }}
+                            />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: theme === "light" ? "#ffffff" : "#020617", borderColor: "#475569", borderRadius: 8 }}
+                              labelStyle={{ color: theme === "light" ? "#1e293b" : "#cbd5e1" }}
+                              itemStyle={{ fontSize: 12 }}
+                              labelFormatter={(v) => formatTimeLabel(Number(v))}
+                            />
+                            <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 12, paddingBottom: 6 }} formatter={(value) => <span style={{ color: "#94a3b8" }}>{value}</span>} />
+                            <Line type="monotone" dataKey="am" stroke="#38bdf8" strokeWidth={2} dot={false} name="AM" isAnimationActive={true} animationDuration={900} animationEasing="ease-out" />
+                            <Line type="monotone" dataKey="fm" stroke="#34d399" strokeWidth={2} strokeDasharray="6 3" dot={false} name="FM" isAnimationActive={true} animationDuration={900} animationEasing="ease-out" animationBegin={150} />
+                            <Line type="monotone" dataKey="pm" stroke="#a78bfa" strokeWidth={2} strokeDasharray="2 3" dot={false} name="PM" isAnimationActive={true} animationDuration={900} animationEasing="ease-out" animationBegin={300} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-3 text-[11px]">
+                        <div className="rounded-lg border border-sky-500/20 bg-sky-500/8 px-3 py-2">
+                          <p className="font-semibold text-sky-300">AM key trait</p>
+                          <p className="mt-0.5 text-slate-500">Envelope height changes — amplitude carries the info</p>
+                        </div>
+                        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/8 px-3 py-2">
+                          <p className="font-semibold text-emerald-300">FM key trait</p>
+                          <p className="mt-0.5 text-slate-500">Peak spacing changes — frequency carries the info</p>
+                        </div>
+                        <div className="rounded-lg border border-violet-500/20 bg-violet-500/8 px-3 py-2">
+                          <p className="font-semibold text-violet-300">PM key trait</p>
+                          <p className="mt-0.5 text-slate-500">Waveform shifts left/right — phase carries the info</p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* ── Side-by-side comparison ── */}
                   {comparisonMode && comparisonSnapshot && (
                     <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
                       <p className="text-xs uppercase tracking-[0.25em] text-sky-200 mb-3">Side-by-Side Comparison</p>
